@@ -3,29 +3,55 @@ import cv2
 import numpy as np
 import pandas as pd
 from tqdm import tqdm
-from PIL import Image
 import pytorch_lightning as pl
-import shutil
+from torch.utils.data import Dataset, DataLoader
+from albumentations import Compose, Resize, Normalize
+import shutil 
+from my_tokenizer import MyTokenizer
 
-
+'''
+The Datamodule class containing the lighting data module and the torch dataset for the IAM dataset.
+'''
 class IAM(pl.LightningDataModule):
-  def __init__(self):
-    pass 
+  def __init__(self, train_path:str, test_path:str, tokenizer_path:str = None, *, distribute_data: bool = False, batch_size: int = 32, num_workers: int = 4):
+    self.train_path = train_path
+    self.test_path = test_path
+    self.distribute_data = distribute_data
+    self.batch_size = batch_size
+    self.num_workers = num_workers 
+    self.tokenizer_path = tokenizer_path
 
   def prepare_data(self):
-    pass 
+    '''
+    Loads the dataset to disk
+    '''
+    if self.distribute_data:
+      self.distribute_lines() 
 
   def setup(self, stage=None):
-    pass 
+    '''
+    Split the dataset into train and test sets and initialize datasets
+    '''
+    if stage == 'fit' or stage is None:
+      # load train dataset
+      self.train_dataset = IAMDataset(self.train_path)
+      if self.tokenizer_path is None:
+        self.tokenizer = MyTokenizer()
+        self.tokenizer.train(self.train_dataset.transcriptions)
+      else:
+        self.tokenizer = MyTokenizer(self.tokenizer_path)
+      
+      self.train_dataset.set_tokenizer(self.tokenizer)
+    if stage == 'test' or stage is None: 
+      self.test_dataset = IAMDataset(self.test_path)
+      self.test_dataset.set_tokenizer(self.tokenizer)
 
   def train_dataloader(self):
-    pass 
+    return DataLoader(self.train_dataset, batch_size=self.batch_size, num_workers=self.num_workers, shuffle=True) 
 
-  def val_dataloader(self):
-    pass 
 
   def test_dataloader(self):
-    pass 
+    return DataLoader(self.test_dataset, batch_size=self.batch_size, num_workers=self.num_workers) 
 
   def distribute_lines(self):
     '''
@@ -96,6 +122,45 @@ class IAM(pl.LightningDataModule):
 
     print(f'Copied {count} transcriptions.')
 
+class IAMDataset(Dataset):
+  def __init__(self, path:str, transform=None):
+    self.path = path 
+    self.transform = transform
+    self.get_data_from_dirs()
 
-iam = IAM()
-iam.distribute_lines()
+  def __len__(self):
+    return len(self.imgs) 
+
+  def __getitem__(self, idx):
+    img = self.load_image(self.imgs[idx])
+    transcription = self.tokenizer.encode(self.transcriptions[idx]).ids
+    return img, transcription
+  
+  def set_tokenizer(self, tokenizer):
+    self.tokenizer = tokenizer
+
+  def get_data_from_dirs(self):
+    '''
+    Get the datasets in an array format from the dirs.
+    '''
+    print('Getting data from dirs...')
+    self.imgs = []
+    self.transcriptions = []
+    self.ids = []
+    for dir in os.listdir(self.path):
+      path = os.path.join(self.path, dir).replace('\\', '/')
+      for img_path in os.listdir(path):
+        if img_path.endswith('.png'):
+          transcription_path = os.path.join(path, img_path.replace('.png', '.txt')).replace('\\', '/')
+          img_path = os.path.join(path, img_path).replace('\\', '/')
+          self.imgs.append(img_path)
+          with open(transcription_path) as f:
+            transcription = f.read()
+            self.transcriptions.append(transcription)
+
+  def load_image(self, img_path):
+    img = cv2.imread(img_path)
+    img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    _, img = cv2.threshold(img, 127, 255, cv2.THRESH_BINARY_INV)
+    return img
+  
