@@ -123,9 +123,10 @@ class IAM(pl.LightningDataModule):
     print(f'Copied {count} transcriptions.')
 
 class IAMDataset(Dataset):
-  def __init__(self, path:str, transform=None):
+  def __init__(self, path:str, transform=None, context_size:int = 100):
     self.path = path 
     self.transform = transform
+    self.context_size = context_size
     self.get_data_from_dirs()
 
   def __len__(self):
@@ -134,7 +135,8 @@ class IAMDataset(Dataset):
   def __getitem__(self, idx):
     img = self.load_image(self.imgs[idx])
     transcription = np.array(self.tokenizer.encode(self.transcriptions[idx]).ids, dtype=np.int32)
-    return img, transcription
+
+    return img, self.pad_transcription(transcription)
   
   def set_tokenizer(self, tokenizer):
     self.tokenizer = tokenizer
@@ -164,6 +166,14 @@ class IAMDataset(Dataset):
     _, img = cv2.threshold(img, 127, 255, cv2.THRESH_BINARY_INV)
     return img
   
+  def pad_transcription(self, transcription):
+    '''
+    Pad the transcription to the context size.
+    '''
+    if len(transcription) < self.context_size:
+      zeros = np.zeros(self.context_size - len(transcription))
+      return np.concatenate((transcription, zeros))
+  
 iam = IAMDataset('data/train')
 sent = iam.transcriptions
 
@@ -178,6 +188,8 @@ for s in sent:
 print(max, min)
 iam.set_tokenizer(MyTokenizer(path='tokenizer.json'))
 print(iam[0][0].dtype, iam[0][1].dtype)
+print(iam[0][0].shape, iam[0][1].shape)
+print(iam[0][1])
 
 print(type(iam[0][0]))
 print(type(iam[0][1]))

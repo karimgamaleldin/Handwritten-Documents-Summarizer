@@ -17,7 +17,6 @@ def make_lines(image:str):
 
   # Horizontal projection
   horizontal_projection = np.sum(binary, axis=1)
-  print(print(np.unique(binary)))
 
   # Detecting lines
   line_start = -1
