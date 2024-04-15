@@ -133,7 +133,7 @@ class IAMDataset(Dataset):
 
   def __getitem__(self, idx):
     img = self.load_image(self.imgs[idx])
-    transcription = self.tokenizer.encode(self.transcriptions[idx]).ids
+    transcription = np.array(self.tokenizer.encode(self.transcriptions[idx]).ids, dtype=np.int32)
     return img, transcription
   
   def set_tokenizer(self, tokenizer):
@@ -164,3 +164,20 @@ class IAMDataset(Dataset):
     _, img = cv2.threshold(img, 127, 255, cv2.THRESH_BINARY_INV)
     return img
   
+iam = IAMDataset('data/train')
+sent = iam.transcriptions
+
+max = 0
+min = 93
+for s in sent:
+  if len(s) > max:
+    max = len(s)
+  if len(s) < min:
+    min = len(s)
+
+print(max, min)
+iam.set_tokenizer(MyTokenizer(path='tokenizer.json'))
+print(iam[0][0].dtype, iam[0][1].dtype)
+
+print(type(iam[0][0]))
+print(type(iam[0][1]))
