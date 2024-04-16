@@ -5,22 +5,32 @@ import pandas as pd
 from tqdm import tqdm
 import pytorch_lightning as pl
 from torch.utils.data import Dataset, DataLoader
-from albumentations import Compose, Resize, Normalize
-import shutil 
 from my_tokenizer import MyTokenizer
+import albumentations as A
+from albumentations.pytorch import ToTensorV2
+from custom_augmentation import Erosion, Dilation
 
 '''
 The Datamodule class containing the lighting data module and the torch dataset for the IAM dataset.
 '''
 class IAM(pl.LightningDataModule):
-  def __init__(self, train_path:str, test_path:str, tokenizer_path:str = None, *, distribute_data: bool = False, batch_size: int = 32, num_workers: int = 4):
+  def __init__(self, train_path:str, test_path:str, tokenizer_path:str = None, *, distribute_data: bool = False, batch_size: int = 16, num_workers: int = 4, transform=None):
     self.train_path = train_path
     self.test_path = test_path
     self.distribute_data = distribute_data
     self.batch_size = batch_size
     self.num_workers = num_workers 
     self.tokenizer_path = tokenizer_path
-
+    if transform is None:
+      self.transform = A.Compose([
+        A.Rotate(limit=10, p=0.5),
+        A.GaussianBlur(blur_limit=(3, 3), p=0.5),
+        Dilation(p=0.5),
+        Erosion(p=0.5),
+        ToTensorV2()
+      ]) 
+    else:
+      self.transform = transform
   def prepare_data(self):
     '''
     Loads the dataset to disk
@@ -28,19 +38,19 @@ class IAM(pl.LightningDataModule):
     if self.distribute_data:
       self.distribute_lines() 
 
+    self.train_dataset = IAMDataset(self.train_path, transform=self.transform)
+    if self.tokenizer_path is None:
+      self.tokenizer = MyTokenizer()
+      self.tokenizer.train(self.train_dataset.transcriptions)
+    else:
+      self.tokenizer = MyTokenizer(self.tokenizer_path)
+
   def setup(self, stage=None):
     '''
     Split the dataset into train and test sets and initialize datasets
     '''
     if stage == 'fit' or stage is None:
-      # load train dataset
-      self.train_dataset = IAMDataset(self.train_path)
-      if self.tokenizer_path is None:
-        self.tokenizer = MyTokenizer()
-        self.tokenizer.train(self.train_dataset.transcriptions)
-      else:
-        self.tokenizer = MyTokenizer(self.tokenizer_path)
-      
+      self.train_dataset = IAMDataset(self.train_path, transform=self.transform)
       self.train_dataset.set_tokenizer(self.tokenizer)
     if stage == 'test' or stage is None: 
       self.test_dataset = IAMDataset(self.test_path)
@@ -83,9 +93,10 @@ class IAM(pl.LightningDataModule):
           form_id = f'{form_prefix}-{line[1]}' # a01-000, a01-001, etc.
           img_idx = line[2] # 0, 1, 2, etc.
           src_file = f'data/lines/{form_prefix}/{form_id}/{form_id}-{img_idx}.png'
-          dest_folder = f'{path}/{form_id}'
-          os.makedirs(dest_folder, exist_ok=True) # create the folder if it doesn't exist
-          shutil.copy(src_file, dest_folder)
+          dest_dir = f'{path}/{form_id}'
+          dest_file = f'{dest_dir}/{form_id}-{img_idx}.png'
+          os.makedirs(dest_dir, exist_ok=True)
+          self.load_save_image(src_file, dest_file)
           count += 1
     print(f'Copied {count} files.')
 
@@ -122,6 +133,13 @@ class IAM(pl.LightningDataModule):
 
     print(f'Copied {count} transcriptions.')
 
+  def load_save_image(self, src, dest):
+    img = cv2.imread(src)
+    img = cv2.resize(img, (384, 384))
+    img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    _, binary = cv2.threshold(img, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
+    cv2.imwrite(dest, binary)
+
 class IAMDataset(Dataset):
   def __init__(self, path:str, transform=None, context_size:int = 100):
     self.path = path 
@@ -133,9 +151,12 @@ class IAMDataset(Dataset):
     return len(self.imgs) 
 
   def __getitem__(self, idx):
-    img = self.load_image(self.imgs[idx])
-    transcription = np.array(self.tokenizer.encode(self.transcriptions[idx]).ids, dtype=np.int32)
+    img =  cv2.imread(self.imgs[idx], cv2.IMREAD_GRAYSCALE) / 255.0
+    img = np.expand_dims(img, axis=-1)
+    if self.transform:
+      img = self.transform(image=img)['image']
 
+    transcription = np.array(self.tokenizer.encode(self.transcriptions[idx]).ids, dtype=np.int32)
     return img, self.pad_transcription(transcription)
   
   def set_tokenizer(self, tokenizer):
@@ -171,25 +192,29 @@ class IAMDataset(Dataset):
     Pad the transcription to the context size.
     '''
     if len(transcription) < self.context_size:
-      zeros = np.zeros(self.context_size - len(transcription))
+      zeros = np.zeros(self.context_size - len(transcription), dtype=np.int32)
       return np.concatenate((transcription, zeros))
   
-iam = IAMDataset('data/train')
-sent = iam.transcriptions
 
-max = 0
-min = 93
-for s in sent:
-  if len(s) > max:
-    max = len(s)
-  if len(s) < min:
-    min = len(s)
+iam = IAM('data/train', 'data/test', distribute_data=True)
+iam.prepare_data()
 
-print(max, min)
-iam.set_tokenizer(MyTokenizer(path='tokenizer.json'))
-print(iam[0][0].dtype, iam[0][1].dtype)
-print(iam[0][0].shape, iam[0][1].shape)
-print(iam[0][1])
+# iam = IAMDataset('data/train')
+# sent = iam.transcriptions
 
-print(type(iam[0][0]))
-print(type(iam[0][1]))
+# max = 0
+# min = 93
+# for s in sent:
+#   if len(s) > max:
+#     max = len(s)
+#   if len(s) < min:
+#     min = len(s)
+
+# print(max, min)
+# iam.set_tokenizer(MyTokenizer(path='tokenizer.json'))
+# print(iam[0][0].dtype, iam[0][1].dtype)
+# print(iam[0][0].shape, iam[0][1].shape)
+# print(iam[0][1])
+
+# print(type(iam[0][0]))
+# print(type(iam[0][1]))
