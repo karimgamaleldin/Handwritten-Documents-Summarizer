@@ -5,7 +5,7 @@ import pandas as pd
 from tqdm import tqdm
 import pytorch_lightning as pl
 from torch.utils.data import Dataset, DataLoader
-from tokenizer.my_tokenizer import MyTokenizer
+from .tokenizer.my_tokenizer import MyTokenizer
 import albumentations as A
 from albumentations.pytorch import ToTensorV2
 from custom_augmentation import Erosion, Dilation
