@@ -53,8 +53,8 @@ class IAM(pl.LightningDataModule):
         if self.distribute_data:
             self.distribute_lines()
 
-        self.train_dataset = IAMDataset(self.train_path, transform=self.transform)
         if self.tokenizer_path is None:
+            self.train_dataset = IAMDataset(self.train_path, transform=self.transform)
             self.tokenizer = MyTokenizer()
             self.tokenizer.train(self.train_dataset.transcriptions)
         else:
@@ -80,9 +80,7 @@ class IAM(pl.LightningDataModule):
         )
 
     def test_dataloader(self):
-        return DataLoader(
-            self.test_dataset, batch_size=self.batch_size, num_workers=self.num_workers
-        )
+        return DataLoader(self.test_dataset, batch_size=self.batch_size, num_workers=self.num_workers)
 
     def distribute_lines(self):
         """
@@ -90,15 +88,9 @@ class IAM(pl.LightningDataModule):
         """
         if not os.path.exists("data/train"):
             os.makedirs("data/train")
-            self.transfer_line_img(
-                ["trainset", "validationset1", "validationset2"], "data/train"
-            )
-            self.transfer_transcription(
-                ["trainset", "validationset1", "validationset2"], "data/train"
-            )
-            print(
-                "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~"
-            )
+            self.transfer_line_img(["trainset", "validationset1", "validationset2"], "data/train")
+            self.transfer_transcription(["trainset", "validationset1", "validationset2"], "data/train")
+            print("~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~")
 
         if not os.path.exists("data/test"):
             os.makedirs("data/test")
@@ -119,9 +111,7 @@ class IAM(pl.LightningDataModule):
                     form_prefix = line[0]  # a01, a02, etc.
                     form_id = f"{form_prefix}-{line[1]}"  # a01-000, a01-001, etc.
                     img_idx = line[2]  # 0, 1, 2, etc.
-                    src_file = (
-                        f"data/lines/{form_prefix}/{form_id}/{form_id}-{img_idx}.png"
-                    )
+                    src_file = f"data/lines/{form_prefix}/{form_id}/{form_id}-{img_idx}.png"
                     dest_dir = f"{path}/{form_id}"
                     dest_file = f"{dest_dir}/{form_id}-{img_idx}.png"
                     os.makedirs(dest_dir, exist_ok=True)
@@ -186,9 +176,7 @@ class IAMDataset(Dataset):
         if self.transform:
             img = self.transform(image=img)["image"]
 
-        transcription = np.array(
-            self.tokenizer.encode(self.transcriptions[idx]).ids, dtype=np.int32
-        )
+        transcription = np.array(self.tokenizer.encode(self.transcriptions[idx]).ids, dtype=np.int32)
         return img, self.pad_transcription(transcription)
 
     def set_tokenizer(self, tokenizer):
@@ -206,9 +194,7 @@ class IAMDataset(Dataset):
             path = os.path.join(self.path, dir).replace("\\", "/")
             for img_path in os.listdir(path):
                 if img_path.endswith(".png"):
-                    transcription_path = os.path.join(
-                        path, img_path.replace(".png", ".txt")
-                    ).replace("\\", "/")
+                    transcription_path = os.path.join(path, img_path.replace(".png", ".txt")).replace("\\", "/")
                     img_path = os.path.join(path, img_path).replace("\\", "/")
                     self.imgs.append(img_path)
                     with open(transcription_path) as f:
