@@ -3,6 +3,7 @@ import numpy as np
 import albumentations as A
 from albumentations.pytorch import ToTensorV2
 
+
 # Custom transformation for Erosion
 class Erosion(A.ImageOnlyTransform):
     def __init__(self, kernel_size=3, always_apply=False, p=0.5):
@@ -11,6 +12,7 @@ class Erosion(A.ImageOnlyTransform):
 
     def apply(self, img, **params):
         return cv2.erode(img, self.kernel, iterations=1)
+
 
 # Custom transformation for Dilation
 class Dilation(A.ImageOnlyTransform):
