@@ -65,3 +65,44 @@ class Decoder(nn.Module):
 class AdaptivePositionalEncoding(nn.Module):
     def __init__(self, d_model: int, max_len: int):
         pass
+
+
+class RecurrenceAttention(nn.Module):
+    '''
+    Recurrence Attention module for the decoder model
+    
+    A class that implements the recurrence attention mechanism in the Transformer-XL model
+    '''
+    def __init__(self, embed_dim: int, num_heads: int, dropout: float = 0.1):
+        super(RecurrenceAttention, self).__init__()
+        self.embed_dim = embed_dim
+        self.num_heads = num_heads
+        self.dropout = dropout
+
+        self.qkv = nn.Linear(self.embed_dim, 3 * self.embed_dim)
+        self.fc = nn.Linear(self.embed_dim, self.embed_dim)
+        self.dropout = nn.Dropout(self.dropout)
+
+
+    def forward(self, x, enc_output, hidden_past, tgt_mask, tgt_key_padding_mask):
+        # Calculate the query, key and value
+        h_telda = torch.concat([hidden_past.detach(), x], dim=1) # detach hidden_past to prevent backpropagation
+        qkv = self.qkv(x) # produces the query, key & value qkv shape: (batch_size, seq_len, 3 * embed_dim)
+        q, k, v = torch.chunk(qkv, 3, dim=-1) # split qkv into q, k, v shape: (batch_size, seq_len, embed_dim)
+        q = q.reshape(1, -1, self.num_heads, self.embed_dim // self.num_heads)
+        k = k.reshape(1, -1, self.num_heads, self.embed_dim // self.num_heads)
+        v = v.reshape(1, -1, self.num_heads, self.embed_dim // self.num_heads)
+
+        q = q.permute(1, 0, 2, 3)
+        k = k.permute(1, 0, 2, 3)
+        v = v.permute(1, 0, 2, 3)
+
+        q, k, v = torch.matmul(x, q.T), torch.matmul(h_telda, k.T), torch.matmul(h_telda, v.T)
+
+        x = self.scaled_dot_product_attention(q, k, v, tgt_mask, tgt_key_padding_mask)
+        x = self.fc(x)
+        x = self.dropout(x)
+        return x
+
+    def scaled_dot_product_attention(self, q, k, v, mask, padding_mask):
+        pass
