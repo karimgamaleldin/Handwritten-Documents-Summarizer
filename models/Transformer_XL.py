@@ -13,7 +13,7 @@ class RecurrenceAttention(nn.Module):
     self.fc = nn.Linear(self.embed_dim, self.embed_dim)
     self.dropout = nn.Dropout(self.dropout)
 
-  def forward(self, x, h_past, tgt_mask, pad_mask):
+  def forward(self, x, h_past, r_emb, r_bias, r_w_bias, tgt_mask, pad_mask):
     '''
     Shapes:
     x: (batch_size, seq_len, embed_dim)
@@ -57,57 +57,90 @@ class AdaptiveEmbedding(nn.Module):
   def forward(self):
     pass
 
-class PointwiseFeedForward(nn.Module):
-  def __init__(self):
-    pass 
+class PointWiseResidualFF(nn.Module):
+  def __init__(self, d_model, dff, dropout=0.1, pre_norm=True, activation='gelu'):
+    super(PointWiseResidualFF, self).__init__()
 
-  def forward(self):
-    pass
-
-class Transformer_Layer(nn.Module):
-  def __init__(self, embed_dim, num_heads, dropout=0.1):
-    super(Transformer_Layer, self).__init__()
-    self.embed_dim = embed_dim
-    self.num_heads = num_heads
+    self.d_model = d_model
+    self.dff = dff
     self.dropout = dropout
+    self.pre_norm = pre_norm
 
-    self.multi_head_attention = RecurrenceAttention(self.embed_dim, self.num_heads)
-    self.adaptive_positional_encoding = AdaptiveEmbedding()
-    self.layer_norm1 = nn.LayerNorm(self.embed_dim)
-    self.point_ff = PointwiseFeedForward()
+    fc1 = nn.Linear(d_model, dff)
+    activ = nn.GELU() if activation == 'gelu' else nn.ReLU()
+    dropout1 = nn.Dropout(dropout)
+    fc2 = nn.Linear(dff, d_model)
+    dropout2 = nn.Dropout(dropout)
 
+    self.net = nn.Sequential(fc1, activ, dropout1, fc2, dropout2)
+    self.layer_norm = nn.LayerNorm(d_model)
 
   def forward(self, x):
-    x = self.multi_head_attention(x)
-    x = self.adaptive_positional_encoding(x)
-    x = self.layer_norm1(x)
-    x = self.point_ff(x)
+    if self.pre_norm:
+      out = self.layer_norm(x)
+      return self.net(out) + x 
+    else:
+      res = self.net(x) + x
+      return self.layer_norm(res)
+      
+
+class TransformerDecoderLayerRelative(nn.Module):
+  def __init__(self, d_model, dff, num_heads, dropout=0.1, pre_norm=True):
+    super(TransformerDecoderLayerRelative, self).__init__()
+    self.num_heads = num_heads
+    self.d_model = d_model
+    self.dff = dff
+    self.dropout = dropout
+
+    self.multi_head_attention = RecurrenceAttention(d_model, num_heads)
+    self.pos_ff = PointWiseResidualFF(d_model, dff, dropout, pre_norm)
+
+  def forward(self, x, r_emb, r_bias, r_w_bias, mem=None, tgt_mask=None, pad_mask=None):
+    output = self.multi_head_attention(x, mem, r_emb, r_bias, r_w_bias, tgt_mask, pad_mask)
+    output = self.pos_ff(output)
     return x
 
 class Transformer_XL(nn.Module):
-  def __init__(self, n_tokens, n_layers, n_heads, d_model, d_head, d_inner, tie_weights=True, dropout=0.1):
+  def __init__(self, n_tokens, n_layers, n_heads, d_model, context_len, tie_weights=True, dropout=0.1):
     super(Transformer_XL, self).__init__()
     self.n_tokens = n_tokens
     self.n_layers = n_layers
     self.n_heads = n_heads
-    self.d_model = d_model 
+    self.d_model = d_model
+    self.context_len = context_len
+    assert d_model % n_heads == 0, 'd_model should be divisible by n_heads'
+    self.d_head = d_model // n_heads
 
-    self.adap_embed = AdaptiveEmbedding(n_tokens, d_model, d_head, d_inner)
+    self.adap_embed = AdaptiveEmbedding(n_tokens, d_model)
     self.dropout = nn.Dropout(dropout)
     
     self.layers = nn.ModuleList()
     for _ in range(n_layers):
-      self.layers.append(Transformer_Layer(d_model, n_heads, dropout))
+      self.layers.append(TransformerDecoderLayerRelative(d_model, n_heads, dropout))
 
     self.fc = nn.Linear(d_model, n_tokens)
     if tie_weights: # ties the embedding with the weights of the final layer
       self.fc.weight = self.adap_embed.embeddings.weight
 
-    self.r_emb = nn.Parameter(pass)
-    self.r_w_bias = nn.Parameter(pass)
-    self.r_r_bias = nn.Parameter(pass)
+    self.r_emb = torch.tensor(self.n_layers, self.context_len, self.n_heads, self.d_head)
+    self.r_emb = nn.Parameter(self.r_emb) # Initialize the relative embedding
+    
+    self.r_w_bias = torch.tensor(self.n_layers, self.n_heads, self.d_head)
+    self.r_w_bias = nn.Parameter(self.r_bias) # Initialize the relative weight bias
+    
+    self.r_bias = torch.tensor(self.n_layers, self.context_len, self.n_heads)
+    self.r_bias = nn.Parameter(self.r_bias) # Initialize the relative bias
 
-  def forward(self):
-    pass 
+  def forward(self, x, target, mem=None):
+    out = self.adap_embed(x) # Calculate the adaptive embedding
+    out = self.dropout(out) # Apply dropout to the output
+    new_mem = [out] # Initialize the new memory
 
+    for i, layer in enumerate(self.layers): # loop on all layers
+      r_emb, r_bias = self.r_emb[i], self.r_bias[i] # Get the relative embedding and bias
+      out = layer(out, mem, r_emb, r_bias, self.r_w_bias[i]) # Calculate the output of the layer
+      new_mem.append(out) # Append the output to the new memory
+
+    out = self.dropout(out)
+    return out, new_mem
 
