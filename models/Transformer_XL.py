@@ -1,44 +1,90 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from .positional_encoding import PositionalEncoding
+
+class PositionalEmbedding(nn.Module):
+  def __init__(self, d):
+    super(PositionalEmbedding, self).__init__()
+    self.d = d
+    inv_freq = 1 / (10000 ** (torch.arange(0.0, d, 2.0) / d)) # Calculate the inverse frequency to be used in the positional encoding
+    self.register_buffer('inv_freq', inv_freq)
+
+  def forward(self, pos):
+    sinusoid_inp = torch.einsum('i,j->ij', pos, self.inv_freq) # multiply each position i in the pos array with each position j in the inv_freq array
+    pos_emb = torch.cat([torch.sin(sinusoid_inp), torch.cos(sinusoid_inp)], dim=-1)
+    return pos_emb
 
 class RecurrenceAttention(nn.Module):
-  def __init__(self, embed_dim, num_heads):
+  def __init__(self, d_model, d_inner, num_heads, dropout=0.1, pre_norm=False):
     super(RecurrenceAttention, self).__init__()
-    self.embed_dim = embed_dim
+    self.d_model = d_model
+    self.d_inner = d_inner
     self.num_heads = num_heads
+    self.d_head = d_model // num_heads
 
-    self.qkv = nn.Linear(self.embed_dim, 3 * self.embed_dim)
-    self.fc = nn.Linear(self.embed_dim, self.embed_dim)
-    self.dropout = nn.Dropout(self.dropout)
+    self.q = nn.Linear(d_model, d_inner * num_heads, bias=False) # to project the query to the inner dimension
+    self.kv = nn.Linear(d_model, d_inner * num_heads * 2, bias=False) # to project the key and value to the inner dimension
 
-  def forward(self, x, h_past, r_emb, r_bias, r_w_bias, tgt_mask, pad_mask):
+    self.drop = nn.Dropout(dropout)
+    self.fc = nn.Linear(self.d_inner * self.num_heads, d_model) # to project the output of the multi-head attention to the original dimension
+    self.layer_norm = nn.LayerNorm(self.d_model) 
+    self.pre_norm = pre_norm
+
+  def forward(self, x, pos_emb, u, v, tgt_mask=None, mem=None):
     '''
     Shapes:
     x: (batch_size, seq_len, embed_dim)
-    h_past: (batch_size, seq_len, embed_dim)
-    tgt_mask: (seq_len, seq_len)
-    pad_mask: (batch_size, seq_len)
+    pos_emb: (cur_seq + prev_seq, d_in)
+    u: (num_heads, d_head)
+    v: (num_heads, d_head)
+    tgt_mask: (batch_size, seq_len, seq_len)
+    mem: (batch_size, prev_seq, embed_dim)
     '''
-    batch_size, _ , _ = x.size()
-    # Getting the query, key and value
-    h_telda = torch.cat([h_past.detach(), x], dim=1) # Calculate the concatenation of the hidden states, Shape (batch_size, seq_len, 2 * embed_dim)
-    qkv = self.qkv(x) # Calculate the query, key and value, Shape (batch_size, seq_len, 3 * embed_dim)
-    q, k, v = torch.chunk(qkv, 3, dim=-1) # Split qkv into q, k, v, Shape (batch_size, seq_len, embed_dim)
+    prev_seq = mem.size(1) if mem is not None else 0
+    batch_size, cur_seq = x.size(0), x.size(1)
     
-    q, k, v = self.split_heads(q, batch_size), self.split_heads(k, batch_size), self.split_heads(v, batch_size) # Split the query, key and value into heads, Shape (batch_size, num_heads, seq_len, embed_dim // num_heads)
-    q, k, v = torch.matmul(x, q.T), torch.matmul(h_telda, k.T), torch.matmul(h_telda, v.T) # Calculate the query, key and value
+    # Get the weight matrices for the query, key and value
+    h_telda = torch.cat([mem, x], dim=1) if mem is not None else x
+    q_tfmd, kv = self.q(x), self.kv(h_telda) # Calculate the query and key-value matrices
+    k_tfmd, v_tfmd = torch.chunk(kv, 2, dim=-1) # Split the key-value matrix into key and value matrices # (b, seq_len + prev_seq, d_inner * num_heads)
+    q_tfmd, k_tfmd, v_tfmd = q_tfmd.view(batch_size, cur_seq, self.num_heads, self.d_head), k_tfmd.view(batch_size, cur_seq + prev_seq, self.num_heads, self.d_head), v_tfmd.view(batch_size, cur_seq + prev_seq, self.num_heads, self.d_head)
 
-    x = self.scaled_dot_product_attention(q, k, v, tgt_mask, pad_mask) # Calculate the scaled dot product attention
-    x = self.fc(x)
-    return x, q, k, v
-  
-  def split_heads(self, x, batch_size):
-    x = x.reshape(batch_size, -1, self.num_heads, self.embed_dim // self.num_heads)
+    # Calculate the attention
+    content_attn = torch.einsum('bihd,bjhd->bijh', q_tfmd + u, k_tfmd) # Calculate the content-based attention
+    pos_emb = pos_emb.view(cur_seq + prev_seq, self.num_heads, self.d_head)
+    pos_attn = torch.einsum('bihd,jhd->bijh', q_tfmd + v, pos_emb) # Calculate the position-based attention
+    position_attn = self._rel_shift(pos_attn) # Shift the position-based attention
+    attn = content_attn + position_attn # Combine the content-based and position-based attention
+
+    if tgt_mask is not None:
+      attn = attn.masked_fill(tgt_mask == 0, float('-inf'))
+    attn = attn / (self.d_head ** 0.5)
+    attn = F.softmax(attn, dim=1)
+    attn = self.drop(attn)
+    weightd_val = torch.einsum('bijh,bjhd->bihd', attn, v_tfmd).contiguous().view(batch_size, cur_seq, -1)
+
+    if not self.pre_norm:
+      return self.layer_norm(x + self.fc(weightd_val))
+    else:
+      return self.fc(self.layer_norm(x + weightd_val))
+
+
+  def _rel_shift(self, x):
+    '''
+    The shift operation used to calculate the relative position encoding
+    '''
+    zero_pad = torch.zeros((x.size(0), 1, *x.size()[2:]), dtype=x.dtype)
+    x_padded = torch.cat([zero_pad, x], dim=1)
+    x_padded = x_padded.view(x.size(1) + 1, x.size(0), *x.size()[2:])
+    x = x_padded[1:].view_as(x)
+    return x
+    
+
+  def _split_heads(self, x: torch.Tensor, batch_size: int):
+    x = x.view(batch_size, -1, self.num_heads, self.d_head)
     return x.permute(0, 2, 1, 3)
   
-  def scaled_dot_product_attention(self, q, k, v, mask, padding_mask):
+  def _scaled_dot_product_attention(self, q, k, v, mask, padding_mask):
     qk = torch.matmul(q, k.permute(0, 1, 3, 2)) / (q.size(-1) ** 0.5) # Calculate the scaled dot product attention
     if mask is not None:
       qk = qk.masked_fill(mask == 0, float('-inf')) # Apply the mask to the scaled dot product attention
@@ -48,24 +94,17 @@ class RecurrenceAttention(nn.Module):
     output = torch.matmul(qk, v)
     return output
 
-    
-
-class AdaptiveEmbedding(nn.Module):
-  def __init__(self):
-    pass 
-
-  def forward(self):
-    pass
-
-class PointWiseResidualFF(nn.Module):
-  def __init__(self, d_model, dff, dropout=0.1, pre_norm=True, activation='gelu'):
-    super(PointWiseResidualFF, self).__init__()
-
+class TransformerDecoderLayerRelative(nn.Module):
+  def __init__(self, d_model, num_heads, dff, d_inner, dropout=0.1, pre_norm=True, activation='gelu'):
+    super(TransformerDecoderLayerRelative, self).__init__()
+    self.num_heads = num_heads
     self.d_model = d_model
     self.dff = dff
     self.dropout = dropout
     self.pre_norm = pre_norm
+    self.d_inner = d_inner
 
+    self.multi_head_attention = RecurrenceAttention(d_model, d_inner, num_heads)
     fc1 = nn.Linear(d_model, dff)
     activ = nn.GELU() if activation == 'gelu' else nn.ReLU()
     dropout1 = nn.Dropout(dropout)
@@ -75,72 +114,56 @@ class PointWiseResidualFF(nn.Module):
     self.net = nn.Sequential(fc1, activ, dropout1, fc2, dropout2)
     self.layer_norm = nn.LayerNorm(d_model)
 
-  def forward(self, x):
+  def forward(self, x, pos_emb, u, v, mem=None, tgt_mask=None):
+    output = self.multi_head_attention(x, pos_emb, u, v, mem=mem, tgt_mask=tgt_mask)
     if self.pre_norm:
-      out = self.layer_norm(x)
-      return self.net(out) + x 
+      output = self.layer_norm(output)
+      return self.net(output) + x 
     else:
-      res = self.net(x) + x
-      return self.layer_norm(res)
-      
+      output = self.net(output) + output
+      return self.layer_norm(output)
 
-class TransformerDecoderLayerRelative(nn.Module):
-  def __init__(self, d_model, dff, num_heads, dropout=0.1, pre_norm=True):
-    super(TransformerDecoderLayerRelative, self).__init__()
-    self.num_heads = num_heads
-    self.d_model = d_model
-    self.dff = dff
-    self.dropout = dropout
-
-    self.multi_head_attention = RecurrenceAttention(d_model, num_heads)
-    self.pos_ff = PointWiseResidualFF(d_model, dff, dropout, pre_norm)
-
-  def forward(self, x, r_emb, r_bias, r_w_bias, mem=None, tgt_mask=None, pad_mask=None):
-    output = self.multi_head_attention(x, mem, r_emb, r_bias, r_w_bias, tgt_mask, pad_mask)
-    output = self.pos_ff(output)
-    return x
-
-class Transformer_XL(nn.Module):
-  def __init__(self, n_tokens, n_layers, n_heads, d_model, context_len, tie_weights=True, dropout=0.1):
-    super(Transformer_XL, self).__init__()
-    self.n_tokens = n_tokens
+class TransformerXL(nn.Module):
+  def __init__(self, vocab_size, n_layers, n_heads, d_model, d_inner, dff, seq_len, tie_weights=True, dropout=0.1):
+    super(TransformerXL, self).__init__()
+    self.n_tokens = vocab_size
     self.n_layers = n_layers
     self.n_heads = n_heads
     self.d_model = d_model
-    self.context_len = context_len
+    self.d_inner = d_inner
+    self.dff = dff
+    self.seq_len = seq_len
     assert d_model % n_heads == 0, 'd_model should be divisible by n_heads'
     self.d_head = d_model // n_heads
 
-    self.adap_embed = AdaptiveEmbedding(n_tokens, d_model)
+    self.embed = nn.Embedding(vocab_size, d_model)
+    self.pos_emb = PositionalEmbedding(d_model)
+
     self.dropout = nn.Dropout(dropout)
-    
     self.layers = nn.ModuleList()
     for _ in range(n_layers):
-      self.layers.append(TransformerDecoderLayerRelative(d_model, n_heads, dropout))
+      self.layers.append(TransformerDecoderLayerRelative(d_model, n_heads, dff, d_inner, dropout=dropout))
 
-    self.fc = nn.Linear(d_model, n_tokens)
+    self.fc = nn.Linear(d_model, vocab_size)
     if tie_weights: # ties the embedding with the weights of the final layer
-      self.fc.weight = self.adap_embed.embeddings.weight
+      self.fc.weight = self.embed.weight
 
-    self.r_emb = torch.tensor(self.n_layers, self.context_len, self.n_heads, self.d_head)
-    self.r_emb = nn.Parameter(self.r_emb) # Initialize the relative embedding
+    # Learnable parameters for the relative positional encoding
+    self.u = nn.Parameter(torch.Tensor(n_layers, n_heads, self.d_head))
+    self.v = nn.Parameter(torch.Tensor(n_layers, n_heads, self.d_head))
     
-    self.r_w_bias = torch.tensor(self.n_layers, self.n_heads, self.d_head)
-    self.r_w_bias = nn.Parameter(self.r_bias) # Initialize the relative weight bias
-    
-    self.r_bias = torch.tensor(self.n_layers, self.context_len, self.n_heads)
-    self.r_bias = nn.Parameter(self.r_bias) # Initialize the relative bias
 
-  def forward(self, x, target, mem=None):
-    out = self.adap_embed(x) # Calculate the adaptive embedding
-    out = self.dropout(out) # Apply dropout to the output
-    new_mem = [out] # Initialize the new memory
+  def forward(self, x):
+    pass
+    # out = self.embed(x) * (self.d_model ** 0.5) # Calculate the embedding
+    # out = self.dropout(out) # Apply dropout to the output
+    # pos_idxs = torch.arange()
 
-    for i, layer in enumerate(self.layers): # loop on all layers
-      r_emb, r_bias = self.r_emb[i], self.r_bias[i] # Get the relative embedding and bias
-      out = layer(out, mem, r_emb, r_bias, self.r_w_bias[i]) # Calculate the output of the layer
-      new_mem.append(out) # Append the output to the new memory
+    # new_mem = [out] # Initialize the new memory
+    # for i, layer in enumerate(self.layers): # loop on all layers
+    #   u, v = self.u[i], self.v[i]
+    #   out = layer(out, )
 
-    out = self.dropout(out)
-    return out, new_mem
+    # out = self.dropout(out)
+    # return out, new_mem
 
