@@ -20,8 +20,8 @@ class RecurrenceAttention(nn.Module):
     self.d_model = d_model
     self.d_inner = d_inner
     self.num_heads = num_heads
-    self.d_head = d_model // num_heads
-
+    self.d_head = d_inner // num_heads
+    
     self.q = nn.Linear(d_model, d_inner * num_heads, bias=False) # to project the query to the inner dimension
     self.kv = nn.Linear(d_model, d_inner * num_heads * 2, bias=False) # to project the key and value to the inner dimension
 
@@ -47,6 +47,7 @@ class RecurrenceAttention(nn.Module):
     h_telda = torch.cat([mem, x], dim=1) if mem is not None else x
     q_tfmd, kv = self.q(x), self.kv(h_telda) # Calculate the query and key-value matrices
     k_tfmd, v_tfmd = torch.chunk(kv, 2, dim=-1) # Split the key-value matrix into key and value matrices # (b, seq_len + prev_seq, d_inner * num_heads)
+    print(q_tfmd.shape, k_tfmd.shape, v_tfmd.shape)
     q_tfmd, k_tfmd, v_tfmd = q_tfmd.view(batch_size, cur_seq, self.num_heads, self.d_head), k_tfmd.view(batch_size, cur_seq + prev_seq, self.num_heads, self.d_head), v_tfmd.view(batch_size, cur_seq + prev_seq, self.num_heads, self.d_head)
 
     # Calculate the attention
@@ -56,8 +57,8 @@ class RecurrenceAttention(nn.Module):
     position_attn = self._rel_shift(pos_attn) # Shift the position-based attention
     attn = content_attn + position_attn # Combine the content-based and position-based attention
 
-    if tgt_mask is not None:
-      attn = attn.masked_fill(tgt_mask == 0, float('-inf'))
+    if tgt_mask is not None: # Apply the mask to the attention shape: (batch_size, cur_seq, cur_seq + prev_seq, num_heads)
+      attn = attn.masked_fill(tgt_mask, float('-inf')) # Apply the mask to the attention
     attn = attn / (self.d_head ** 0.5)
     attn = F.softmax(attn, dim=1)
     attn = self.drop(attn)
@@ -93,6 +94,40 @@ class RecurrenceAttention(nn.Module):
       qk = qk.masked_fill(padding_mask == 0, 0)
     output = torch.matmul(qk, v)
     return output
+  
+class CrossAttention(nn.Module):
+  def __init__(self, d_model, d_inner, num_heads, dropout=0.1):
+    super(CrossAttention, self).__init__()
+    self.d_model = d_model
+    self.num_heads = num_heads
+    self.d_head = d_inner // num_heads
+    self.dropout = nn.Dropout(dropout)
+
+    self.q = nn.LazyLinear(d_inner, bias=False)
+    self.kv = nn.LazyLinear(d_inner * 2, bias=False)
+    self.fc = nn.Linear(d_inner, d_model)
+
+    self.layer_norm = nn.LayerNorm(d_model)
+
+
+  def forward(self, dec, enc):
+    batch = dec.size(0)
+    dec_len, enc_len = dec.size(1), enc.size(1)
+
+    q, kv = self.q(dec), self.kv(enc)
+    k, v = torch.chunk(kv, 2, dim=-1)
+    q = q.view(-1, dec_len, self.num_heads, self.d_head)
+    k = k.view(-1, enc_len, self.num_heads, self.d_head)
+    v = v.view(-1, enc_len, self.num_heads, self.d_head)
+
+    # Calculate the attention
+    attn = torch.einsum('bihd,bjhd->bijh', q, k)
+    attn = attn / (self.d_head ** 0.5)
+    attn = F.softmax(attn, dim=1)
+
+    attn = self.dropout(attn)
+    output = torch.einsum('bijh,bjhd->bihd', attn, v).contiguous().view(batch, dec_len, -1)
+    return self.layer_norm(dec + self.fc(output))
 
 class TransformerDecoderLayerRelative(nn.Module):
   def __init__(self, d_model, num_heads, dff, d_inner, dropout=0.1, pre_norm=True, activation='gelu'):
@@ -105,6 +140,7 @@ class TransformerDecoderLayerRelative(nn.Module):
     self.d_inner = d_inner
 
     self.multi_head_attention = RecurrenceAttention(d_model, d_inner, num_heads)
+    self.cross_attention = CrossAttention(d_model, d_inner, num_heads)
     fc1 = nn.Linear(d_model, dff)
     activ = nn.GELU() if activation == 'gelu' else nn.ReLU()
     dropout1 = nn.Dropout(dropout)
@@ -112,16 +148,36 @@ class TransformerDecoderLayerRelative(nn.Module):
     dropout2 = nn.Dropout(dropout)
 
     self.net = nn.Sequential(fc1, activ, dropout1, fc2, dropout2)
-    self.layer_norm = nn.LayerNorm(d_model)
+    self.layer_norm_1 = nn.LayerNorm(d_model)
+    self.layer_norm_2 = nn.LayerNorm(d_model)
+    self.layer_norm_3 = nn.LayerNorm(d_model)
 
-  def forward(self, x, pos_emb, u, v, mem=None, tgt_mask=None):
-    output = self.multi_head_attention(x, pos_emb, u, v, mem=mem, tgt_mask=tgt_mask)
-    if self.pre_norm:
-      output = self.layer_norm(output)
-      return self.net(output) + x 
+  def forward(self, x, enc_output, pos_emb, u, v, mem=None, tgt_mask=None):
+    if not self.pre_norm:
+      out = self.multi_head_attention(x, pos_emb, u, v, tgt_mask=tgt_mask, mem=mem)
+      out = self.layer_norm_1(x + out)
+
+      out2 = self.cross_attention(out, enc_output)
+      out2 = self.layer_norm_2(out + out2)
+
+      out3 = self.net(out2)
+      out3 = self.layer_norm_3(out2 + out3)
     else:
-      output = self.net(output) + output
-      return self.layer_norm(output)
+      out = self.layer_norm_1(x)
+      out = self.multi_head_attention(out, pos_emb, u, v, tgt_mask=tgt_mask, mem=mem)
+      out = x + out
+
+      out2 = self.layer_norm_2(out)
+      out2 = self.cross_attention(out2, enc_output)
+      out2 = out + out2
+
+      out3 = self.layer_norm_3(out2)
+      out3 = self.net(out3)
+      out3 = out2 + out3
+
+    return out3
+
+
 
 class TransformerXL(nn.Module):
   def __init__(self, vocab_size, n_layers, n_heads, d_model, d_inner, dff, seq_len, tie_weights=True, dropout=0.1):
@@ -153,17 +209,25 @@ class TransformerXL(nn.Module):
     self.v = nn.Parameter(torch.Tensor(n_layers, n_heads, self.d_head))
     
 
-  def forward(self, x):
-    pass
-    # out = self.embed(x) * (self.d_model ** 0.5) # Calculate the embedding
-    # out = self.dropout(out) # Apply dropout to the output
-    # pos_idxs = torch.arange()
+  def forward(self, x, enc_output, mem=None):
+    batch_size, seq_len = x.size(0), x.size(1)
+    prev_seq = mem.size(1) if mem is not None else 0
 
-    # new_mem = [out] # Initialize the new memory
-    # for i, layer in enumerate(self.layers): # loop on all layers
-    #   u, v = self.u[i], self.v[i]
-    #   out = layer(out, )
+    # attn mask
+    tgt_mask = torch.triu(torch.ones(seq_len, seq_len)[...,None], diagonal=1).bool()
 
-    # out = self.dropout(out)
-    # return out, new_mem
+    word_emb = self.embed(x) * (self.d_model ** 0.5)
+    pos_idxs = torch.arange(seq_len + prev_seq - 1, -1, -1.0, dtype=torch.float)
+    pos_emb = self.pos_emb(pos_idxs)
 
+    # forward through the layers
+    new_mem = [word_emb]
+    out = word_emb
+    for i, layer in enumerate(self.layers):
+      lay_mem = None if mem is None else mem[i].detach()
+      u, v = self.u[i], self.v[i]
+      out = layer(out, enc_output, pos_emb, u, v, mem=lay_mem, tgt_mask=tgt_mask)
+      new_mem.append(out)
+    
+    logits = self.fc(self.dropout(out[:, -1]))
+    return logits, new_mem

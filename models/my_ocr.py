@@ -4,6 +4,7 @@ import pytorch_lightning as pl
 from torch import nn, optim
 from torch.nn import functional as F
 from .Transformer_XL import Transformer_XL
+from .VisionEncoder import VisionEncoder
 
 class MyOCR(pl.LightningModule):
     '''
@@ -12,9 +13,16 @@ class MyOCR(pl.LightningModule):
     def __init__(self, vision_configs, decoder_configs, lr=5e-4):
         super(MyOCR, self).__init__()
         self.lr = lr
-        pass
+        self.vision_encoder = VisionEncoder(**vision_configs)
+        self.decoder = Transformer_XL(**decoder_configs)
+        self.fc = nn.Linear(decoder_configs['d_model'], decoder_configs['vocab_size'])
+        self.criterion = nn.CrossEntropyLoss()
+        self.save_hyperparameters()
 
-    def forward(self):
+    def forward(self, batch, batch_idx):
+        img, seq = batch
+        enc_output = self.vision_encoder(img)
+        
         pass
 
     def training_step(self):
