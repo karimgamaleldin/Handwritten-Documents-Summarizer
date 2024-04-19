@@ -1,18 +1,27 @@
 import os
 import cv2
+import torch
 import numpy as np
 import pandas as pd
 from tqdm import tqdm
 import pytorch_lightning as pl
-from torch.utils.data import Dataset, DataLoader
-from .tokenizer.my_tokenizer import MyTokenizer
+from torch.utils.data import Dataset, DataLoader, Sampler
+from tokenizer.my_tokenizer import MyTokenizer
 import albumentations as A
 from albumentations.pytorch import ToTensorV2
-from .custom_augmentation import Erosion, Dilation
+from custom_augmentation import Erosion, Dilation
 
 """
 The Datamodule class containing the lighting data module and the torch dataset for the IAM dataset.
 """
+
+def iam_collate_fn(batch):
+    """
+    Collate function for the IAM dataset.
+    """
+    print('--------')
+    print(batch)
+    return batch
 
 
 class IAM(pl.LightningDataModule):
@@ -72,15 +81,17 @@ class IAM(pl.LightningDataModule):
             self.test_dataset.set_tokenizer(self.tokenizer)
 
     def train_dataloader(self):
+        sampler = IAMDataSampler(self.train_dataset, self.batch_size)
         return DataLoader(
             self.train_dataset,
-            batch_size=self.batch_size,
             num_workers=self.num_workers,
-            shuffle=True,
+            batch_sampler=sampler,
+            collate_fn=iam_collate_fn,
         )
 
     def test_dataloader(self):
-        return DataLoader(self.test_dataset, batch_size=self.batch_size, num_workers=self.num_workers)
+        sampler = IAMDataSampler(self.test_dataset, self.batch_size)
+        return DataLoader(self.test_dataset, num_workers=self.num_workers, batch_sampler=sampler, collate_fn=iam_collate_fn)
 
     def distribute_lines(self):
         """
@@ -160,6 +171,22 @@ class IAM(pl.LightningDataModule):
         cv2.imwrite(dest, binary)
 
 
+
+class IAMDataSampler(Sampler):
+    def __init__(self, dataset, batch_size):
+        self.dataset = dataset
+        self.batch_size = batch_size
+        self.sorted_indices = sorted(range(len(dataset)), key=lambda i: len(dataset[i][1]))
+    
+    def __len__(self):
+        return (len(self.dataset) + self.batch_size - 1) // self.batch_size
+
+    def __iter__(self):
+        for i in range(0, len(self.sorted_indices), self.batch_size):
+            yield self.sorted_indices[i:i + self.batch_size]
+
+
+
 class IAMDataset(Dataset):
     def __init__(self, path: str, transform=None, context_size: int = 100):
         self.path = path
@@ -177,7 +204,7 @@ class IAMDataset(Dataset):
             img = self.transform(image=img)["image"]
 
         transcription = np.array(self.tokenizer.encode(self.transcriptions[idx]).ids, dtype=np.int32)
-        return img, self.pad_transcription(transcription)
+        return img, transcription
 
     def set_tokenizer(self, tokenizer):
         self.tokenizer = tokenizer

@@ -30,7 +30,7 @@ class RecurrenceAttention(nn.Module):
     self.layer_norm = nn.LayerNorm(self.d_model) 
     self.pre_norm = pre_norm
 
-  def forward(self, x, pos_emb, u, v, tgt_mask=None, mem=None):
+  def forward(self, x, pos_emb, u, v, tgt_mask=None, pad_mask=None, mem=None):
     '''
     Shapes:
     x: (batch_size, seq_len, embed_dim)
@@ -58,6 +58,10 @@ class RecurrenceAttention(nn.Module):
 
     if tgt_mask is not None: # Apply the mask to the attention shape: (batch_size, cur_seq, cur_seq + prev_seq, num_heads)
       attn = attn.masked_fill(tgt_mask, float('-inf')) # Apply the mask to the attention
+
+    if pad_mask is not None:
+      attn = attn.masked_fill(pad_mask, float('-inf'))
+
     attn = attn / (self.d_head ** 0.5)
     attn = F.softmax(attn, dim=1)
     attn = self.drop(attn)
@@ -151,9 +155,9 @@ class TransformerDecoderLayerRelative(nn.Module):
     self.layer_norm_2 = nn.LayerNorm(d_model)
     self.layer_norm_3 = nn.LayerNorm(d_model)
 
-  def forward(self, x, enc_output, pos_emb, u, v, mem=None, tgt_mask=None):
+  def forward(self, x, enc_output, pos_emb, u, v, mem=None, tgt_mask=None, pad_mask=None):
     if not self.pre_norm:
-      out = self.multi_head_attention(x, pos_emb, u, v, tgt_mask=tgt_mask, mem=mem)
+      out = self.multi_head_attention(x, pos_emb, u, v, tgt_mask=tgt_mask, pad_mask=pad_mask, mem=mem)
       out = self.layer_norm_1(x + out)
 
       out2 = self.cross_attention(out, enc_output)
@@ -163,7 +167,7 @@ class TransformerDecoderLayerRelative(nn.Module):
       out3 = self.layer_norm_3(out2 + out3)
     else:
       out = self.layer_norm_1(x)
-      out = self.multi_head_attention(out, pos_emb, u, v, tgt_mask=tgt_mask, mem=mem)
+      out = self.multi_head_attention(out, pos_emb, u, v, tgt_mask=tgt_mask, pad_mask=pad_mask, mem=mem)
       out = x + out
 
       out2 = self.layer_norm_2(out)
@@ -179,7 +183,7 @@ class TransformerDecoderLayerRelative(nn.Module):
 
 
 class TransformerXL(nn.Module):
-  def __init__(self, vocab_size, n_layers, n_heads, d_model, d_inner, dff, seq_len, tie_weights=True, dropout=0.1):
+  def __init__(self, vocab_size, n_layers, n_heads, d_model, d_inner, dff, seq_len, tie_weights=True, dropout=0.1, pad_id=0):
     super(TransformerXL, self).__init__()
     self.n_tokens = vocab_size
     self.n_layers = n_layers
@@ -190,6 +194,7 @@ class TransformerXL(nn.Module):
     self.seq_len = seq_len
     assert d_inner % n_heads == 0, 'd_inner should be divisible by n_heads'
     self.d_head = d_inner // n_heads
+    self.pad_id = pad_id
 
     self.embed = nn.Embedding(vocab_size, d_model)
     self.pos_emb = PositionalEmbedding(d_inner)
@@ -208,12 +213,13 @@ class TransformerXL(nn.Module):
     self.v = nn.Parameter(torch.Tensor(n_layers, n_heads, self.d_head))
     
 
-  def forward(self, x, enc_output, mem=None):
+  def forward(self, x, enc_output, mem=None, out_idx=-1): # out_idx is the index of the output layer to return, because of padding
     batch_size, seq_len = x.size(0), x.size(1)
     prev_seq = mem.size(1) if mem is not None else 0
 
     # attn mask
     tgt_mask = torch.triu(torch.ones(seq_len, seq_len)[...,None], diagonal=1).bool()
+    pad_mask = (x == self.pad_id).unsqueeze(-1).unsqueeze(-1).bool()
 
     word_emb = self.embed(x) * (self.d_model ** 0.5)
     pos_idxs = torch.arange(seq_len + prev_seq - 1, -1, -1.0, dtype=torch.float)
@@ -225,8 +231,8 @@ class TransformerXL(nn.Module):
     for i, layer in enumerate(self.layers):
       lay_mem = None if mem is None else mem[i].detach()
       u, v = self.u[i], self.v[i]
-      out = layer(out, enc_output, pos_emb, u, v, mem=lay_mem, tgt_mask=tgt_mask)
+      out = layer(out, enc_output, pos_emb, u, v, mem=lay_mem, tgt_mask=tgt_mask, pad_mask=pad_mask)
       new_mem.append(out)
     
-    logits = self.fc(self.dropout(out[:, -1]))
+    logits = self.fc(self.dropout(out[:, out_idx]))
     return logits, new_mem

@@ -10,13 +10,13 @@ class MyOCR(pl.LightningModule):
     '''
     MyOCR Module for Optical Character Recognition (OCR) using the VisionEncoder (inspired by ViT) and Decoder (inspired by GPT2) modules
     '''
-    def __init__(self, vision_configs, decoder_configs, lr=5e-4, context_length=15, eos_id=3):
+    def __init__(self, vision_configs, decoder_configs, lr=5e-4, context_length=15, eos_id=3, pad_id=0):
         super(MyOCR, self).__init__()
         self.lr = lr
         self.context_length = context_length
         self.eos_id = eos_id
         self.vision_encoder = VisionEncoder(**vision_configs)
-        self.decoder = TransformerXL(**decoder_configs)
+        self.decoder = TransformerXL(**decoder_configs, pad_id=pad_id)
         self.criterion = nn.CrossEntropyLoss()
         self.save_hyperparameters() 
 
@@ -40,11 +40,13 @@ class MyOCR(pl.LightningModule):
     
     def teacher_forcing(self, seq, enc_output):
         inp = torch.zeros(seq.size(0), self.context_length, dtype=torch.long)
+        out, mem = inp, None
         inp[:, 0] = 2 
         for i in range(1, seq.size(1)):
             label = seq[:, i]
             # Forward pass
-            out = self.decoder(inp, enc_output)
+            out_idx = i - 1 if i < self.context_length else -1
+            out, mem = self.decoder(out, enc_output, mem=mem, out_idx=out_idx)
             # loss = self.criterion(out, label)
             
             # Get non finished sequences
@@ -62,9 +64,6 @@ class MyOCR(pl.LightningModule):
             else:
                 inp = torch.cat([inp[:, 1:], label[:, None]], dim=1)
             
-            
-
-
     def greedy_search(self, seq, enc_output):
         pass
 
