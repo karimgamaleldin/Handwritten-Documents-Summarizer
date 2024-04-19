@@ -18,15 +18,15 @@ class RecurrenceAttention(nn.Module):
   def __init__(self, d_model, d_inner, num_heads, dropout=0.1, pre_norm=False):
     super(RecurrenceAttention, self).__init__()
     self.d_model = d_model
-    self.d_inner = d_inner
+    self.d_inner = d_inner # the inner dimension of the query, key and value matrices
     self.num_heads = num_heads
     self.d_head = d_inner // num_heads
     
-    self.q = nn.Linear(d_model, d_inner * num_heads, bias=False) # to project the query to the inner dimension
-    self.kv = nn.Linear(d_model, d_inner * num_heads * 2, bias=False) # to project the key and value to the inner dimension
+    self.q = nn.Linear(d_model, d_inner, bias=False) # to project the query to the inner dimension
+    self.kv = nn.Linear(d_model, d_inner * 2, bias=False) # to project the key and value to the inner dimension
 
     self.drop = nn.Dropout(dropout)
-    self.fc = nn.Linear(self.d_inner * self.num_heads, d_model) # to project the output of the multi-head attention to the original dimension
+    self.fc = nn.Linear(self.d_inner, d_model) # to project the output of the multi-head attention to the original dimension
     self.layer_norm = nn.LayerNorm(self.d_model) 
     self.pre_norm = pre_norm
 
@@ -47,7 +47,6 @@ class RecurrenceAttention(nn.Module):
     h_telda = torch.cat([mem, x], dim=1) if mem is not None else x
     q_tfmd, kv = self.q(x), self.kv(h_telda) # Calculate the query and key-value matrices
     k_tfmd, v_tfmd = torch.chunk(kv, 2, dim=-1) # Split the key-value matrix into key and value matrices # (b, seq_len + prev_seq, d_inner * num_heads)
-    print(q_tfmd.shape, k_tfmd.shape, v_tfmd.shape)
     q_tfmd, k_tfmd, v_tfmd = q_tfmd.view(batch_size, cur_seq, self.num_heads, self.d_head), k_tfmd.view(batch_size, cur_seq + prev_seq, self.num_heads, self.d_head), v_tfmd.view(batch_size, cur_seq + prev_seq, self.num_heads, self.d_head)
 
     # Calculate the attention
@@ -189,11 +188,11 @@ class TransformerXL(nn.Module):
     self.d_inner = d_inner
     self.dff = dff
     self.seq_len = seq_len
-    assert d_model % n_heads == 0, 'd_model should be divisible by n_heads'
-    self.d_head = d_model // n_heads
+    assert d_inner % n_heads == 0, 'd_model should be divisible by n_heads'
+    self.d_head = d_inner // n_heads
 
     self.embed = nn.Embedding(vocab_size, d_model)
-    self.pos_emb = PositionalEmbedding(d_model)
+    self.pos_emb = PositionalEmbedding(d_inner)
 
     self.dropout = nn.Dropout(dropout)
     self.layers = nn.ModuleList()
