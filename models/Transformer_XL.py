@@ -188,7 +188,7 @@ class TransformerXL(nn.Module):
     self.d_inner = d_inner
     self.dff = dff
     self.seq_len = seq_len
-    assert d_inner % n_heads == 0, 'd_model should be divisible by n_heads'
+    assert d_inner % n_heads == 0, 'd_inner should be divisible by n_heads'
     self.d_head = d_inner // n_heads
 
     self.embed = nn.Embedding(vocab_size, d_model)
