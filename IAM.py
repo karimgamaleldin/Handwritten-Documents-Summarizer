@@ -1,5 +1,6 @@
 import os
 import cv2
+from pytorch_lightning.utilities.types import EVAL_DATALOADERS
 import torch
 import numpy as np
 import pandas as pd
@@ -100,6 +101,10 @@ class IAM(pl.LightningDataModule):
     def test_dataloader(self):
         sampler = IAMDataSampler(self.test_dataset, self.batch_size)
         return DataLoader(self.test_dataset, num_workers=self.num_workers, batch_sampler=sampler, collate_fn=iam_collate_fn)
+    
+    def val_dataloader(self):
+        sampler = IAMDataSampler(self.test_dataset, self.batch_size)
+        return DataLoader(self.test_dataset, num_workers=self.num_workers, batch_sampler=sampler, collate_fn=iam_collate_fn)
 
     def distribute_lines(self):
         """
@@ -196,10 +201,9 @@ class IAMDataSampler(Sampler):
 
 
 class IAMDataset(Dataset):
-    def __init__(self, path: str, transform=None, context_size: int = 100):
+    def __init__(self, path: str, transform=None):
         self.path = path
         self.transform = transform
-        self.context_size = context_size
         self.get_data_from_dirs()
 
     def __len__(self):
@@ -242,13 +246,6 @@ class IAMDataset(Dataset):
         _, img = cv2.threshold(img, 127, 255, cv2.THRESH_BINARY_INV)
         return img
 
-    def pad_transcription(self, transcription):
-        """
-        Pad the transcription to the context size.
-        """
-        if len(transcription) < self.context_size:
-            zeros = np.zeros(self.context_size - len(transcription), dtype=np.int32)
-            return np.concatenate((transcription, zeros))
 
 
 # iam = IAM("data/train", "data/test", distribute_data=True)

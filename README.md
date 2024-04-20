@@ -10,7 +10,7 @@ This projects takes inspirations from well-known papers to implement, create and
 
 1. [OCR encoder](./models/vision_encoder.py) - A transformer-based vision model inspired by [ViT](https://arxiv.org/abs/2010.11929) architecture and [CvT](https://arxiv.org/abs/2103.15808v1) (implemented from scratch using pytorch)
 2. [OCR decoder](./models/Transformer_XL.py) - A transformer-based text model inspired by [Transformer-XL](https://arxiv.org/abs/1901.02860) architecture (implemented from scratch using pytorch)
-3. [Text summarizer](./models/summarizer.py) - a pretrained large language model (LLM) obtained from [HuggingFace models](https://huggingface.co/models?pipeline_tag=summarization&sort=trending)
+3. [Text summarizer](./models/summarizer.py) - A pretrained large language model (LLM) obtained from [HuggingFace models](https://huggingface.co/models?pipeline_tag=summarization&sort=trending)
 
 The deployed version of the project can be found on [OCR-Summarizer]()
 

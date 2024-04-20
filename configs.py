@@ -1,0 +1,16 @@
+from torchmetrics import CharErrorRate
+EPOCHS = 20
+BATCH_SIZE = 32
+LEARNING_RATE = 5e-4
+CONTEXT_LENGTH = 15
+TEACHER_FORCING_RATIO = 0.95
+MINIMIZE_METRIC = True
+METRIC_TEACHER_FORCE = 'val_cer'
+TOKENIZER_PATH = 'tokenizer/tokenizer.json'
+PAD_ID = 0
+EOS_ID = 3
+DETERMINISTIC = True
+NUM_WORKERS = 3
+VISION_CONFIGS = {}
+DECODER_CONFIGS = {}
+METRIC = CharErrorRate()

@@ -37,3 +37,6 @@ class MyTokenizer:
 
     def get_tokenizer(self):
         return self.tokenizer
+    
+    def batch_decode(self, batch):
+        return [self.decode(x.ids) for x in batch]

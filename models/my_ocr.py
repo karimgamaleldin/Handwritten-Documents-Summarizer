@@ -1,17 +1,20 @@
 import torch 
-import math
+import wandb
 import pytorch_lightning as pl
+from pytorch_lightning.loggers import WandbLogger
 from torch import nn, optim
 from torch.nn import functional as F
 from .Transformer_XL import TransformerXL
 from .vision_encoder import VisionEncoder
+from ..tokenizer.my_tokenizer import MyTokenizer
+from torchmetrics import CharErrorRate
 
-class MyOCR(pl.LightningModule):
+class LitOCR(pl.LightningModule):
     '''
     MyOCR Module for Optical Character Recognition (OCR) using the VisionEncoder (inspired by ViT) and Decoder (inspired by GPT2) modules
     '''
-    def __init__(self, vision_configs, decoder_configs, lr=5e-4, context_length=15, eos_id=3, pad_id=0, metric_teacher_force='val_accuracy', minimize_metric=False):
-        super(MyOCR, self).__init__()
+    def __init__(self, vision_configs, decoder_configs ,*, lr=5e-4, context_length=15, eos_id=3, pad_id=0, metric_teacher_force='val_cer', minimize_metric=False, teacher_forcing_ratio=0.95, tokenizer_path='/tokenizer/tokenizer.json', metric=CharErrorRate()):
+        super(LitOCR, self).__init__()
         self.lr = lr
         self.context_length = context_length
         self.eos_id = eos_id
@@ -19,11 +22,13 @@ class MyOCR(pl.LightningModule):
         self.decoder = TransformerXL(**decoder_configs, pad_id=pad_id)
         self.criterion = nn.CrossEntropyLoss()
         self.automatic_optimization = False
-        self.teacher_forcing_ratio = 0.95
-        self.initial_teacher_forcing_ratio = 0.95
+        self.teacher_forcing_ratio = teacher_forcing_ratio
+        self.initial_teacher_forcing_ratio = teacher_forcing_ratio
         self.metric_teacher_force = metric_teacher_force
         self.minimize_metric = minimize_metric
+        self.tokenizer = MyTokenizer(tokenizer_path)
         self.prev_metric = float('inf') if minimize_metric else float('-inf')
+        self.metric = metric
         self.save_hyperparameters() 
         
 
@@ -45,8 +50,9 @@ class MyOCR(pl.LightningModule):
                 out, loss_arr = self.greedy_search(seq, enc_output)
             return out, loss_arr
         else: # Used for inference
-            enc_output = self.vision_encoder(batch)
-            out, _ = self.greedy_search(batch, enc_output)
+            img = batch
+            enc_output = self.vision_encoder(img)
+            out, _ = self.greedy_search(enc_output=enc_output)
             return out
 
     def training_step(self, batch, batch_idx):
@@ -57,16 +63,27 @@ class MyOCR(pl.LightningModule):
             optimizer.step()
             return loss
         outputs, loss_arr = self.forward(batch, batch_idx, teacher_forcing=True, predict=False, backward=backward)
-
         # logs
         return loss_arr
     
-    def on_validation_epoch_end(self):
+    def on_train_epoch_end(self):
+        # Do something
+        pass
+    
+    def on_validation_epoch_end(self, validation_step_outputs):
         current_metric = self.trainer.callback_metrics[self.metric_teacher_force]
         if (self.minimize_metric and current_metric < self.prev_metric) or (not self.minimize_metric and current_metric > self.prev_metric):
             self.teacher_forcing_ratio = max(self.initial_teacher_forcing_ratio * self.teacher_forcing_ratio, 0.1) # Decay teacher forcing ratio
             self.prev_metric = current_metric
 
+        # Do something
+        model_filename = f'model_{str(self.global_step).zfill(5)}.onnx'
+        torch.onnx.export(self, _, model_filename) # wrong
+        wandb.save(model_filename)
+
+        # Log flattened logits
+        flattened_logits = torch.cat([logits.flatten() for logits in self.logits], dim=0)
+        self.logger.experiment.log({'valid/flattened_logits': wandb.Histogram(flattened_logits), 'global_step':self.global_step})
 
     def test_step(self, batch, batch_idx):
         outputs, loss_arr = self(batch, batch_idx, teacher_forcing=False, predict=False)
@@ -77,6 +94,10 @@ class MyOCR(pl.LightningModule):
         outputs, loss_arr = self(batch, batch_idx, teacher_forcing=True, predict=False)
         # logs
         return loss_arr
+    
+    def predict_step(self, batch, batch_idx):
+        outputs = self(batch, batch_idx, teacher_forcing=False, predict=True)
+        return outputs
 
     def configure_optimizers(self):
         return optim.Adam(self.parameters(), lr=self.lr)
@@ -98,9 +119,14 @@ class MyOCR(pl.LightningModule):
             # Backward pass
             if step_fn is not None:
                 loss = step_fn(out, label)
+                self.log('train/loss', loss, on_step=True, on_epoch=True)
+                self.log(f'train/{self.metric_teacher_force}', self.metric(outputs, seq), on_step=True, on_epoch=True)  
                 loss_arr.append(loss.item())
             else:
-                loss_arr.append(self.criterion(out, label).item())
+                loss = self.criterion(out, label)
+                self.log('val/loss', loss, on_step=False, on_epoch=True)
+                self.log(f'val/{self.metric_teacher_force}', self.metric(outputs, seq), on_step=False, on_epoch=True)
+                loss_arr.append(loss.item())
             # Update input
             scheduled_sample = label if torch.rand(1) < self.teacher_forcing_ratio else out.argmax(dim=-1)
             if i < self.context_length:
@@ -109,7 +135,7 @@ class MyOCR(pl.LightningModule):
                 inp = torch.cat((inp[:, 1:], scheduled_sample.unsqueeze(1)), dim=1)
         return outputs, loss_arr              
             
-    def greedy_search(self, seq, enc_output):
+    def greedy_search(self, seq=None, enc_output=None):
         inp = torch.zeros(seq.size(0), self.context_length, dtype=torch.long)
         out, mem = inp, None
         inp[:, 0] = 2
@@ -123,7 +149,8 @@ class MyOCR(pl.LightningModule):
             out_idx = i - 1 if i < self.context_length else -1
             out, mem = self.decoder(out, enc_output, mem=mem, out_idx=out_idx)
             outputs = torch.cat((outputs, out.argmax(dim=-1).unsqueeze(1)), dim=1)
-            loss_arr.append(self.criterion(out, label).item())
+            if seq is not None:
+                loss_arr.append(self.criterion(out, label).item())
             # Update input
             if i < self.context_length:
                 inp[:, i] = out.argmax(dim=-1)
