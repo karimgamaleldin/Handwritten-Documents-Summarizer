@@ -17,11 +17,19 @@ The Datamodule class containing the lighting data module and the torch dataset f
 
 def iam_collate_fn(batch):
     """
-    Collate function for the IAM dataset.
+    Collate function for the IAM dataloaders.
     """
-    print('--------')
-    print(batch)
-    return batch
+    max_len = max([len(b[1]) for b in batch])
+    imgs = torch.stack([torch.tensor(b[0], dtype=torch.float32) for b in batch])
+    transcriptions = []
+    for b in batch:
+        transcription = torch.tensor(b[1])
+        if len(b[1]) < max_len:
+            zeros = torch.zeros(max_len - len(transcription), dtype=torch.int32)
+            transcription = torch.cat((transcription, zeros))
+        transcriptions.append(transcription)
+    return imgs, torch.stack(transcriptions)
+
 
 
 class IAM(pl.LightningDataModule):
@@ -33,7 +41,7 @@ class IAM(pl.LightningDataModule):
         *,
         distribute_data: bool = False,
         batch_size: int = 16,
-        num_workers: int = 4,
+        num_workers: int = 3,
         transform=None,
     ):
         self.train_path = train_path
