@@ -4,3 +4,7 @@ process_img2.py
 try.jpeg
 try2.jpg
 try3.jpeg
+__pycache__
+wandb
+lightning_logs
+models/__pycache__

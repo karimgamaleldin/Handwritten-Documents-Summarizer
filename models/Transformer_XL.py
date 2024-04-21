@@ -3,8 +3,8 @@ import torch.nn as nn
 import torch.nn.functional as F
 
 class PositionalEmbedding(nn.Module):
-  def __init__(self, d):
-    super(PositionalEmbedding, self).__init__()
+  def __init__(self, d, **kwargs):
+    super(PositionalEmbedding, self).__init__(**kwargs)
     self.d = d
     inv_freq = 1 / (10000 ** (torch.arange(0.0, d, 2.0) / d)) # Calculate the inverse frequency to be used in the positional encoding
     self.register_buffer('inv_freq', inv_freq)
@@ -15,8 +15,8 @@ class PositionalEmbedding(nn.Module):
     return pos_emb
 
 class RecurrenceAttention(nn.Module):
-  def __init__(self, d_model, d_inner, num_heads, dropout=0.1, pre_norm=False):
-    super(RecurrenceAttention, self).__init__()
+  def __init__(self, d_model, d_inner, num_heads, dropout=0.1, pre_norm=False, **kwargs):
+    super(RecurrenceAttention, self).__init__(**kwargs)
     self.d_model = d_model
     self.d_inner = d_inner # the inner dimension of the query, key and value matrices
     self.num_heads = num_heads
@@ -42,6 +42,8 @@ class RecurrenceAttention(nn.Module):
     '''
     prev_seq = mem.size(1) if mem is not None else 0
     batch_size, cur_seq = x.size(0), x.size(1)
+    print('prev_seq: ', mem.size() if mem is not None else None)
+    print('cur_seq: ', x.size() if x is not None else None)
     
     # Get the weight matrices for the query, key and value
     h_telda = torch.cat([mem, x], dim=1) if mem is not None else x
@@ -57,6 +59,7 @@ class RecurrenceAttention(nn.Module):
     attn = content_attn + position_attn # Combine the content-based and position-based attention
 
     if tgt_mask is not None: # Apply the mask to the attention shape: (batch_size, cur_seq, cur_seq + prev_seq, num_heads)
+      print('tgt_mask: ', tgt_mask.size(), attn.size())
       attn = attn.masked_fill(tgt_mask, float('-inf')) # Apply the mask to the attention
 
     if pad_mask is not None:
@@ -77,7 +80,7 @@ class RecurrenceAttention(nn.Module):
     '''
     The shift operation used to calculate the relative position encoding
     '''
-    zero_pad = torch.zeros((x.size(0), 1, *x.size()[2:]), dtype=x.dtype)
+    zero_pad = torch.zeros((x.size(0), 1, *x.size()[2:]), dtype=x.dtype, device=x.device)
     x_padded = torch.cat([zero_pad, x], dim=1)
     x_padded = x_padded.view(x.size(1) + 1, x.size(0), *x.size()[2:])
     x = x_padded[1:].view_as(x)
@@ -99,8 +102,8 @@ class RecurrenceAttention(nn.Module):
     return output
   
 class CrossAttention(nn.Module):
-  def __init__(self, d_model, d_inner, num_heads, dropout=0.1):
-    super(CrossAttention, self).__init__()
+  def __init__(self, d_model, d_inner, num_heads, dropout=0.1, **kwargs):
+    super(CrossAttention, self).__init__(**kwargs)
     self.d_model = d_model
     self.num_heads = num_heads
     self.d_head = d_inner // num_heads
@@ -133,8 +136,8 @@ class CrossAttention(nn.Module):
     return self.layer_norm(dec + self.fc(output))
 
 class TransformerDecoderLayerRelative(nn.Module):
-  def __init__(self, d_model, num_heads, dff, d_inner, dropout=0.1, pre_norm=True, activation='gelu'):
-    super(TransformerDecoderLayerRelative, self).__init__()
+  def __init__(self, d_model, num_heads, dff, d_inner, dropout=0.1, pre_norm=True, activation='gelu', **kwargs):
+    super(TransformerDecoderLayerRelative, self).__init__(**kwargs)
     self.num_heads = num_heads
     self.d_model = d_model
     self.dff = dff
@@ -179,12 +182,23 @@ class TransformerDecoderLayerRelative(nn.Module):
       out3 = out2 + out3
 
     return out3
+  
+
+class CustomEmbedding(nn.Module):
+  def __init__(self, vocab_size, d_model, **kwargs):
+    super(CustomEmbedding, self).__init__(**kwargs)
+    self.embed = nn.Embedding(vocab_size, d_model)
+    self.d_model = d_model
+    
+  def forward(self, x):
+    x = x.long()
+    return self.embed(x) * (self.d_model ** 0.5)
 
 
 
 class TransformerXL(nn.Module):
-  def __init__(self, vocab_size, n_layers, n_heads, d_model, d_inner, dff, seq_len, tie_weights=True, dropout=0.1, pad_id=0):
-    super(TransformerXL, self).__init__()
+  def __init__(self, vocab_size, n_layers, n_heads, d_model, d_inner, dff, seq_len, tie_weights=True, dropout=0.1, pad_id=0, **kwargs):
+    super(TransformerXL, self).__init__(**kwargs)
     self.n_tokens = vocab_size
     self.n_layers = n_layers
     self.n_heads = n_heads
@@ -196,7 +210,7 @@ class TransformerXL(nn.Module):
     self.d_head = d_inner // n_heads
     self.pad_id = pad_id
 
-    self.embed = nn.Embedding(vocab_size, d_model)
+    self.embed = CustomEmbedding(vocab_size, d_model)
     self.pos_emb = PositionalEmbedding(d_inner)
 
     self.dropout = nn.Dropout(dropout)
@@ -206,23 +220,24 @@ class TransformerXL(nn.Module):
 
     self.fc = nn.Linear(d_model, vocab_size)
     if tie_weights: # ties the embedding with the weights of the final layer
-      self.fc.weight = self.embed.weight
+      self.fc.weight = self.embed.embed.weight
 
     # Learnable parameters for the relative positional encoding
     self.u = nn.Parameter(torch.Tensor(n_layers, n_heads, self.d_head))
     self.v = nn.Parameter(torch.Tensor(n_layers, n_heads, self.d_head))
+
     
 
   def forward(self, x, enc_output, mem=None, out_idx=-1): # out_idx is the index of the output layer to return, because of padding
     batch_size, seq_len = x.size(0), x.size(1)
-    prev_seq = mem.size(1) if mem is not None else 0
+    prev_seq = mem[0].size(1) if mem is not None else 0
 
     # attn mask
-    tgt_mask = torch.triu(torch.ones(seq_len, seq_len)[...,None], diagonal=1).bool()
-    pad_mask = (x == self.pad_id).unsqueeze(-1).unsqueeze(-1).bool()
+    tgt_mask = torch.triu(torch.ones(seq_len, seq_len + prev_seq)[...,None], diagonal=1 + prev_seq).bool().to(self.device)
+    pad_mask = (x == self.pad_id).unsqueeze(-1).unsqueeze(-1).bool().to(self.device)
 
-    word_emb = self.embed(x) * (self.d_model ** 0.5)
-    pos_idxs = torch.arange(seq_len + prev_seq - 1, -1, -1.0, dtype=torch.float)
+    word_emb = self.embed(x)
+    pos_idxs = torch.arange(seq_len + prev_seq - 1, -1, -1.0, dtype=torch.float).to(self.device)
     pos_emb = self.pos_emb(pos_idxs)
 
     # forward through the layers
@@ -230,9 +245,18 @@ class TransformerXL(nn.Module):
     out = word_emb
     for i, layer in enumerate(self.layers):
       lay_mem = None if mem is None else mem[i].detach()
+      print('lay_mem: ', lay_mem.size() if lay_mem is not None else None)
       u, v = self.u[i], self.v[i]
       out = layer(out, enc_output, pos_emb, u, v, mem=lay_mem, tgt_mask=tgt_mask, pad_mask=pad_mask)
+      print('out: ', out.size())
       new_mem.append(out)
     
     logits = self.fc(self.dropout(out[:, out_idx]))
+
     return logits, new_mem
+  
+  def set_device(self, device):
+    self.device = device
+    self.pos_emb.to(device)
+    self.u.to(device)
+    self.v.to(device)

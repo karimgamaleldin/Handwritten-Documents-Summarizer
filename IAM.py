@@ -44,7 +44,9 @@ class IAM(pl.LightningDataModule):
         batch_size: int = 16,
         num_workers: int = 3,
         transform=None,
+        **kwargs
     ):
+        super().__init__(**kwargs)
         self.train_path = train_path
         self.test_path = test_path
         self.distribute_data = distribute_data
@@ -52,7 +54,7 @@ class IAM(pl.LightningDataModule):
         self.num_workers = num_workers
         self.tokenizer_path = tokenizer_path
         if transform is None:
-            self.transform = A.Compose(
+            self.train_transform = A.Compose(
                 [
                     A.Rotate(limit=10, p=0.5),
                     A.GaussianBlur(blur_limit=(3, 3), p=0.5),
@@ -61,8 +63,9 @@ class IAM(pl.LightningDataModule):
                     ToTensorV2(),
                 ]
             )
+            self.val_transform = A.Compose([ToTensorV2()])
         else:
-            self.transform = transform
+            self.train_transform = transform
 
     def prepare_data(self):
         """
@@ -72,7 +75,7 @@ class IAM(pl.LightningDataModule):
             self.distribute_lines()
 
         if self.tokenizer_path is None:
-            self.train_dataset = IAMDataset(self.train_path, transform=self.transform)
+            self.train_dataset = IAMDataset(self.train_path, transform=self.train_transform)
             self.tokenizer = MyTokenizer()
             self.tokenizer.train(self.train_dataset.transcriptions)
         else:
@@ -83,13 +86,14 @@ class IAM(pl.LightningDataModule):
         Split the dataset into train and test sets and initialize datasets
         """
         if stage == "fit" or stage is None:
-            self.train_dataset = IAMDataset(self.train_path, transform=self.transform)
+            self.train_dataset = IAMDataset(self.train_path, transform=self.train_transform)
             self.train_dataset.set_tokenizer(self.tokenizer)
         if stage == "test" or stage is None:
-            self.test_dataset = IAMDataset(self.test_path)
+            self.test_dataset = IAMDataset(self.test_path, transform=self.val_transform)
             self.test_dataset.set_tokenizer(self.tokenizer)
 
     def train_dataloader(self):
+        print("Creating train dataloader...")
         sampler = IAMDataSampler(self.train_dataset, self.batch_size)
         return DataLoader(
             self.train_dataset,
@@ -99,10 +103,12 @@ class IAM(pl.LightningDataModule):
         )
 
     def test_dataloader(self):
+        print("Creating test dataloader...")
         sampler = IAMDataSampler(self.test_dataset, self.batch_size)
         return DataLoader(self.test_dataset, num_workers=self.num_workers, batch_sampler=sampler, collate_fn=iam_collate_fn)
     
     def val_dataloader(self):
+        print("Creating val dataloader...")
         sampler = IAMDataSampler(self.test_dataset, self.batch_size)
         return DataLoader(self.test_dataset, num_workers=self.num_workers, batch_sampler=sampler, collate_fn=iam_collate_fn)
 
@@ -245,28 +251,3 @@ class IAMDataset(Dataset):
         img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
         _, img = cv2.threshold(img, 127, 255, cv2.THRESH_BINARY_INV)
         return img
-
-
-
-# iam = IAM("data/train", "data/test", distribute_data=True)
-# iam.prepare_data()
-
-# iam = IAMDataset('data/train')
-# sent = iam.transcriptions
-
-# max = 0
-# min = 93
-# for s in sent:
-#   if len(s) > max:
-#     max = len(s)
-#   if len(s) < min:
-#     min = len(s)
-
-# print(max, min)
-# iam.set_tokenizer(MyTokenizer(path='tokenizer.json'))
-# print(iam[0][0].dtype, iam[0][1].dtype)
-# print(iam[0][0].shape, iam[0][1].shape)
-# print(iam[0][1])
-
-# print(type(iam[0][0]))
-# print(type(iam[0][1]))

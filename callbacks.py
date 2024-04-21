@@ -1,7 +1,7 @@
 import wandb
 import torch
 import pytorch_lightning as pl
-from models.my_ocr import LitOCR
+from models.my_ocr import LitOCRXL
 
 class ExampleLogger(pl.Callback):
   def __init__(self, val_samples, num_samples=2):
@@ -11,7 +11,7 @@ class ExampleLogger(pl.Callback):
     self.val_imgs = self.val_imgs[:num_samples]
     self.val_labels = self.val_labels[:num_samples]
 
-  def on_validation_epoch_end(self, trainer, pl_module: LitOCR):
+  def on_validation_epoch_end(self, trainer, pl_module: LitOCRXL):
     val_imgs = self.val_imgs.to(device=pl_module.device) 
     val_labels = self.val_labels.to(device=pl_module.device) 
     output = pl_module(val_imgs)

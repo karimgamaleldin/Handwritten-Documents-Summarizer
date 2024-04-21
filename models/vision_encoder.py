@@ -1,6 +1,7 @@
 import torch
 import math
 from torch import nn
+import torch.nn.functional as F
 
 class PositionalEncoding(nn.Module):
     '''
@@ -49,7 +50,6 @@ class ConvEmbed(nn.Module):
         x = self.conv(x)
         x = self.flatten(x)
         x = self.linear(x)
-        print(x.shape)
         return F.gelu(x)
 
 class VisionEncoder(nn.Module):
