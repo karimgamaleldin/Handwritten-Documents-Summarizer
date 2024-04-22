@@ -8,7 +8,7 @@ from tokenizers.decoders import BPEDecoder
 
 
 class MyTokenizer:
-    def __init__(self, path: str = None, *, unk_token: str = "[UNK]", end_of_word_suffix: str = "##", special_tokens: list = ["[PAD]", "[UNK]", "[SOS]", "[EOS]"], vocab_size: int = 2048, start_token: tuple = ("[SOS]", 2), end_token: tuple = ("[EOS]", 3)):
+    def __init__(self, path: str = None, *, unk_token: str = "[UNK]", end_of_word_suffix: str = "##", special_tokens: list = ["[PAD]", "[UNK]", "[SOS]", "[EOS]"], vocab_size: int = 512, start_token: tuple = ("[SOS]", 2), end_token: tuple = ("[EOS]", 3)):
         if path:
             self.load(path)
         else:

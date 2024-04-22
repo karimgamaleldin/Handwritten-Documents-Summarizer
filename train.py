@@ -4,7 +4,7 @@ import argparse
 from configs import *
 import pytorch_lightning
 from IAM import IAM
-from models.my_ocr import LitOCRXL
+from models.LitOCRXL import LitOCRXL
 from callbacks import ExampleLogger
 from pytorch_lightning import Trainer
 from pytorch_lightning.callbacks import Callback
@@ -34,7 +34,7 @@ if __name__ == '__main__':
   # Model 
   print('Creating model...')
   tokenizer = MyTokenizer(TOKENIZER_PATH)
-  model = LitOCRXL(VISION_CONFIGS, DECODER_CONFIGS, tokenizer=tokenizer, lr=LEARNING_RATE, context_length=CONTEXT_LENGTH, eos_id=EOS_ID, pad_id=PAD_ID, metric_teacher_force=METRIC_TEACHER_FORCE, minimize_metric=MINIMIZE_METRIC, teacher_forcing_ratio=TEACHER_FORCING_RATIO, metric=METRIC)
+  model = LitOCRXL(VISION_CONFIGS, DECODER_CONFIGS, tokenizer=tokenizer, lr=LEARNING_RATE, context_length=CONTEXT_LENGTH, metric_teacher_force=METRIC_TEACHER_FORCE, minimize_metric=MINIMIZE_METRIC, teacher_forcing_ratio=TEACHER_FORCING_RATIO, metric=METRIC)
 
   # Callbacks
   print('Creating callbacks...')
@@ -45,14 +45,10 @@ if __name__ == '__main__':
   # Trainer
   cuda = 'gpu' if torch.cuda.is_available() else 'cpu'
   print(f'Using {cuda}...')
-  trainer = Trainer(callbacks=callbacks, max_epochs=EPOCHS, deterministic=DETERMINISTIC, accelerator='cpu') # devices=1, precision='16-mixed')
+  trainer = Trainer(callbacks=callbacks, max_epochs=EPOCHS, deterministic=DETERMINISTIC, accelerator=cuda, devices=1, precision='16-mixed')
 
   # Train
   trainer.fit(model, iam)
-
-  # Test
-  trainer.test(datamodule=iam, 
-               ckpt_path=None) # To use last saved model
   
   wandb.finish()
 

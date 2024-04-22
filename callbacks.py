@@ -1,7 +1,7 @@
 import wandb
 import torch
 import pytorch_lightning as pl
-from models.my_ocr import LitOCRXL
+from models.LitOCRXL import LitOCRXL
 
 class ExampleLogger(pl.Callback):
   def __init__(self, val_samples, num_samples=2):

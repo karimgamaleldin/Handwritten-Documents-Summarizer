@@ -77,7 +77,7 @@ class IAM(pl.LightningDataModule):
         if self.tokenizer_path is None:
             self.train_dataset = IAMDataset(self.train_path, transform=self.train_transform)
             self.tokenizer = MyTokenizer()
-            self.tokenizer.train(self.train_dataset.transcriptions)
+            self.tokenizer.train(self.train_dataset.transcriptions) # Train the tokenizer
         else:
             self.tokenizer = MyTokenizer(self.tokenizer_path)
 
