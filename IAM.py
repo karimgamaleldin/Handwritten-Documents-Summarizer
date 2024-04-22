@@ -21,7 +21,7 @@ def iam_collate_fn(batch):
     Collate function for the IAM dataloaders.
     """
     max_len = max([len(b[1]) for b in batch])
-    imgs = torch.stack([torch.tensor(b[0], dtype=torch.float32) for b in batch])
+    imgs = torch.stack([b[0].float().clone().detach() for b in batch])
     transcriptions = []
     for b in batch:
         transcription = torch.tensor(b[1])

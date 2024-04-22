@@ -42,8 +42,7 @@ class RecurrenceAttention(nn.Module):
     '''
     prev_seq = mem.size(1) if mem is not None else 0
     batch_size, cur_seq = x.size(0), x.size(1)
-    print('prev_seq: ', mem.size() if mem is not None else None)
-    print('cur_seq: ', x.size() if x is not None else None)
+
     
     # Get the weight matrices for the query, key and value
     h_telda = torch.cat([mem, x], dim=1) if mem is not None else x
@@ -59,7 +58,6 @@ class RecurrenceAttention(nn.Module):
     attn = content_attn + position_attn # Combine the content-based and position-based attention
 
     if tgt_mask is not None: # Apply the mask to the attention shape: (batch_size, cur_seq, cur_seq + prev_seq, num_heads)
-      print('tgt_mask: ', tgt_mask.size(), attn.size())
       attn = attn.masked_fill(tgt_mask, float('-inf')) # Apply the mask to the attention
 
     if pad_mask is not None:
@@ -245,10 +243,8 @@ class TransformerXL(nn.Module):
     out = word_emb
     for i, layer in enumerate(self.layers):
       lay_mem = None if mem is None else mem[i].detach()
-      print('lay_mem: ', lay_mem.size() if lay_mem is not None else None)
       u, v = self.u[i], self.v[i]
       out = layer(out, enc_output, pos_emb, u, v, mem=lay_mem, tgt_mask=tgt_mask, pad_mask=pad_mask)
-      print('out: ', out.size())
       new_mem.append(out)
     
     logits = self.fc(self.dropout(out[:, out_idx]))

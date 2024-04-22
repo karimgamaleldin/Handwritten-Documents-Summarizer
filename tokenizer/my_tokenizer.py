@@ -39,4 +39,7 @@ class MyTokenizer:
         return self.tokenizer
     
     def batch_decode(self, batch):
-        return [self.decode(x.ids) for x in batch]
+        return [self.decode(x) for x in batch]
+    
+    def token_to_id(self, token: str):
+        return self.tokenizer.token_to_id(token)

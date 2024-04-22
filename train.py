@@ -39,7 +39,7 @@ if __name__ == '__main__':
   # Callbacks
   print('Creating callbacks...')
   callbacks = []
-  callbacks.append(ExampleLogger(val_samples, num_samples=BATCH_SIZE))
+  # callbacks.append(ExampleLogger(val_samples, num_samples=BATCH_SIZE))
 
   print('Training model...')
   # Trainer
