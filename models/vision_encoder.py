@@ -1,7 +1,6 @@
 from torch import nn
 import torch.nn.functional as F
 from .PositionalEncoding import PositionalEncoding
-from configs import CONTEXT_LENGTH
 
 
 class VGGBlock(nn.Module):
@@ -39,7 +38,7 @@ class ConvEmbed(nn.Module):
 
     It does non-overlapping patch extraction using Conv2d layer with kernel_size=patch_size and stride=patch_size
     '''
-    def __init__(self, patch_size=8, in_chans=1, out_channels=32, seq_len=CONTEXT_LENGTH, embed_dim=32, stride=8, padding=2, block_type='vgg'):
+    def __init__(self, patch_size=8, in_chans=1, out_channels=32, seq_len=30, embed_dim=32, stride=8, padding=2, block_type='vgg'):
         super(ConvEmbed, self).__init__()
         self.patch_size = patch_size
         self.in_chans = in_chans
