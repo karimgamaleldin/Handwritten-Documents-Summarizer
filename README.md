@@ -21,6 +21,23 @@ The deployed version of the project can be found on [OCR-Summarizer]()
 - Training: Kaggle
 - Experiment Tracking: Weights & Biases
 
+## Experiments 🧪
+
+| Model        | val_cer |
+| ------------ | ------- |
+| Experiment 1 | 0.8     |
+| Row 2 Col 1  |         |
+| Row 3 Col 1  |         |
+
+<details>
+  <summary>Experiment 1</summary>
+  Encoder: 1 CNN Layer for patch embedding + Transformer 
+  Decoder: Vanilla Transformer
+  Optimizer: Adam (lr = 5e-4)
+  Vocab Size: 128
+  Training strategy: Teacher forcing
+</details>
+
 ## Credits
 
 - [An Image is Worth 16x16 Words: Transformers for Image Recognition at Scale](https://arxiv.org/abs/2010.11929)

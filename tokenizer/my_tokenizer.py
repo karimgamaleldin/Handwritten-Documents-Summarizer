@@ -8,14 +8,14 @@ from tokenizers.decoders import BPEDecoder
 
 
 class MyTokenizer:
-    def __init__(self, path: str = None, *, unk_token: str = "[UNK]", end_of_word_suffix: str = "##", special_tokens: list = ["[PAD]", "[UNK]", "[SOS]", "[EOS]"], vocab_size: int = 512, start_token: tuple = ("[SOS]", 2), end_token: tuple = ("[EOS]", 3)):
+    def __init__(self, path: str = None, *, unk_token: str = "[UNK]", end_of_word_suffix: str = "##", special_tokens: list = ["[PAD]", "[UNK]", "[SOS]", "[EOS]"], vocab_size: int = 256, start_token: tuple = ("[SOS]", 2), end_token: tuple = ("[EOS]", 3)):
         if path:
             self.load(path)
         else:
             self.tokenizer = Tokenizer(BPE(unk_token=unk_token, end_of_word_suffix=end_of_word_suffix))
             self.trainer = BpeTrainer(special_tokens=special_tokens, vocab_size=vocab_size, show_progress=True, end_of_word_suffix=end_of_word_suffix)
             self.tokenizer.pre_tokenizer = BertPreTokenizer()
-            self.tokenizer.normalizer = BertNormalizer(lowercase=False)
+            self.tokenizer.normalizer = BertNormalizer(lowercase=True)
             self.tokenizer.post_processor = TemplateProcessing(single=f"{start_token[0]} $A {end_token[0]}", special_tokens=[start_token, end_token])
             self.tokenizer.decoder = BPEDecoder(suffix=end_of_word_suffix)
 

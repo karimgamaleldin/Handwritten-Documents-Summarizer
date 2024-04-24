@@ -182,11 +182,11 @@ class IAM(pl.LightningDataModule):
 
         print(f"Copied {count} transcriptions.")
 
-    def load_save_image(self, src, dest):
-        img = cv2.imread(src)
-        img = cv2.resize(img, (384, 384))
-        img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-        _, binary = cv2.threshold(img, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
+    def load_save_image(self, src, dest, size=(512, 128)):
+        img = cv2.imread(src, cv2.IMREAD_GRAYSCALE)
+        img = cv2.resize(img, size)
+        blur = cv2.GaussianBlur(img, (5, 5), 0) # Apply Gaussian blur, to reduce the noise
+        _, binary = cv2.threshold(blur, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
         cv2.imwrite(dest, binary)
 
 
@@ -246,8 +246,8 @@ class IAMDataset(Dataset):
                         transcription = f.read()
                         self.transcriptions.append(transcription)
 
-    def load_image(self, img_path):
-        img = cv2.imread(img_path)
-        img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-        _, img = cv2.threshold(img, 127, 255, cv2.THRESH_BINARY_INV)
-        return img
+    
+
+iam = IAM(train_path='data/train', test_path='data/test', tokenizer_path='tokenizer/tokenizer.json', distribute_data=True)
+iam.prepare_data()
+iam.setup()

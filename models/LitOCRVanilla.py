@@ -18,7 +18,7 @@ class LitOCRVanilla(pl.LightningModule):
     self.lr = lr
     self.context_length = context_length
     self.vision_encoder = VisionEncoder(**vision_configs)
-    self.decoder = VanillaDecoder(**decoder_configs)
+    self.decoder = VanillaDecoder(**decoder_configs, pad_id=tokenizer.token_to_id('[PAD]'))
     self.criterion = nn.CrossEntropyLoss()
     self.tokenizer = tokenizer
     self.metric = metric
@@ -88,7 +88,7 @@ class LitOCRVanilla(pl.LightningModule):
             # Forward pass
             out_idx = i - 1 if i < self.context_length else -1 
             dec_output = self.decoder(dec_input.detach(), enc_output.detach(), out_idx=out_idx)
-            dec_out_max = dec_output.argmax(-1).unsqueeze(1)
+            dec_out_max = dec_output.argmax(-1).unsqueeze(-1)
             outputs = torch.cat([outputs, dec_out_max], dim=-1)
 
             # Backward pass 
@@ -98,7 +98,11 @@ class LitOCRVanilla(pl.LightningModule):
             if train:
                 if torch.isnan(loss):
                     print("NAN Loss")
-                    print(torch.isnan(self.parameters()).any())
+                    print("Loss: ", loss)
+                    print(torch.any(torch.isnan(dec_output)))
+                    print("Dec_out_max: ", dec_output.shape)
+                    print(torch.isnan(label))
+                    print("Label: ", label.shape)
                     raise ValueError("NAN Loss")
                 loss_arr.append(loss)
                 self.log('train_loss', loss, on_step=True, on_epoch=True, prog_bar=True)
@@ -115,11 +119,10 @@ class LitOCRVanilla(pl.LightningModule):
             
             # Updating our sequences
             # scheduled_sampling =  label.unsqueeze(1) if torch.rand(1) < self.teacher_forcing_ratio else dec_out_max.detach().long()
-            scheduled_sampling =  dec_out_max.detach().long()
+            scheduled_sampling =  label.unsqueeze(-1) 
             if i < self.context_length:
-                dec_input[: , i] = scheduled_sampling.squeeze(1)
+                dec_input[: , i] = scheduled_sampling.squeeze(-1)
             else:
                 dec_input = torch.cat([dec_input[:, 1:], scheduled_sampling], dim=-1)
 
         return outputs, loss_arr
-

@@ -6,11 +6,8 @@ def make_lines(image: str):
     """
     Process the text image to convert to lines
     """
-    # Load image
-    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-
     # Apply Gaussian blur
-    blur = cv2.GaussianBlur(gray, (5, 5), 0)
+    blur = cv2.GaussianBlur(image, (5, 5), 0)
 
     # Binarize the image
     _, binary = cv2.threshold(blur, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
@@ -40,5 +37,5 @@ def make_lines(image: str):
 
 
 path = "./try2.jpg"
-img = cv2.imread(path)
+img = cv2.imread(path, cv2.IMREAD_GRAYSCALE)
 make_lines(img)
