@@ -31,12 +31,15 @@ The deployed version of the project can be found on [OCR-Summarizer]()
 
 <details>
   <summary>Experiment 1</summary>
-  Encoder: 1 CNN Layer for patch embedding + Transformer 
-  Decoder: Vanilla Transformer
-  Optimizer: Adam (lr = 5e-4)
-  Vocab Size: 128
-  Training strategy: Teacher forcing
+  
+  1. Encoder: 1 CNN Layer for patch embedding + Transformer 
+  2. Decoder: Vanilla Transformer
+  3. Optimizer: Adam (learning rate = 5e-4)
+  4. Vocabulary Size: 128
+  5. Training Strategy: Teacher forcing
+     
 </details>
+
 
 ## Credits
 
