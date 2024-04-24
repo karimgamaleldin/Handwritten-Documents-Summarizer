@@ -2,6 +2,12 @@ from torch import nn
 import torch.nn.functional as F
 from .PositionalEncoding import PositionalEncoding
 
+class DenseBlock(nn.Module):
+    def __init__(self):
+        pass 
+
+    def forward(self, x):
+        pass
 
 class VGGBlock(nn.Module):
     '''
