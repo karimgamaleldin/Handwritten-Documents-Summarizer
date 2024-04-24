@@ -1,29 +1,30 @@
 import torch 
 import wandb
 import pytorch_lightning as pl
-from pytorch_lightning.loggers import WandbLogger
 from torch import nn, optim
-from torch.nn import functional as F
 from .vision_encoder import VisionEncoder
 from torchmetrics.text import CharErrorRate
-from .vanilla_decoder import VanillaDecoder
+from torch.optim.lr_scheduler import ReduceLROnPlateau
 
-class LitOCRVanilla(pl.LightningModule):
+class LitOCR(pl.LightningModule):
   '''
   MyOCR Module for Optical Character Recognition (OCR) using the VisionEncoder (inspired by ViT) and Decoder (inspired by GPT2) modules
   '''
 
-  def __init__(self, vision_configs, decoder_configs, tokenizer,*, lr=5e-4, context_length=15, metric=CharErrorRate(), max_len=100, **kwargs):
-    super(LitOCRVanilla, self).__init__(**kwargs)
+  def __init__(self, vision_encoder: VisionEncoder, decoder, tokenizer,*, lr=5e-4, context_length=15, max_len=100, schedule_sample=True, in_dims=(1, 128, 512), **kwargs):
+    super(LitOCR, self).__init__(**kwargs)
     self.lr = lr
     self.context_length = context_length
-    self.vision_encoder = VisionEncoder(**vision_configs)
-    self.decoder = VanillaDecoder(**decoder_configs, pad_id=tokenizer.token_to_id('[PAD]'))
+    self.vision_encoder = vision_encoder
+    self.decoder = decoder
     self.criterion = nn.CrossEntropyLoss()
     self.tokenizer = tokenizer
-    self.metric = metric
+    self.metric = CharErrorRate()
     self.max_len = max_len # In case of infinite loop so initalize to have the max value
     self.automatic_optimization = False
+    self.schedule_sample = schedule_sample
+    self.schedule_sample_prob = 0.95
+    self.in_dims = in_dims
     self.save_hyperparameters(ignore=['metric'])  
 
   def forward(self, imgs):
@@ -54,6 +55,12 @@ class LitOCRVanilla(pl.LightningModule):
     outputs, loss_arr = self.teacher(imgs, transcriptions, train=True)
     loss_mean = torch.stack(loss_arr).mean()
     return loss_mean
+  
+  def on_train_epoch_end(self, outputs):
+    sch = self.lr_schedulers()
+    val_loss = self.trainer.callback_metrics['val_loss']
+    sch.step(val_loss)
+    print(f"Learning rate stepped with val_loss: {val_loss}")
 
 
   def validation_step(self, batch, batch_idx):
@@ -64,13 +71,26 @@ class LitOCRVanilla(pl.LightningModule):
     outputs, loss_arr = self.teacher(imgs, transcriptions)
     loss_mean = torch.stack(loss_arr).mean()
     return loss_mean
+  
+  # def on_validation_epoch_end(self, validation_outputs=None):
+  #   dummy_input = torch.zeros((1, *self.in_dims), dtype=torch.float32).to(self.device)
+  #   model_filename = f'model_{self.current_epoch}.onnx'
+  #   torch.onnx.export(self, dummy_input, model_filename)
+  #   wandb.save(model_filename)
 
   def configure_optimizers(self):
     '''
     Configure the optimizer for the OCR Model
     '''
-    return optim.Adam(self.parameters(), lr=self.lr)
-  
+    optimizer = optim.Adam(self.parameters(), lr=self.lr)
+    scheduler = ReduceLROnPlateau(optimizer, mode='min', factor=0.1, patience=3, verbose=True)
+    return {
+        'optimizer': optimizer,
+        'lr_scheduler': {
+            'scheduler': scheduler,
+            'monitor': 'val_loss'
+        }
+    }
 
   def teacher(self, imgs, transcriptions, train=False):
         '''
@@ -79,13 +99,14 @@ class LitOCRVanilla(pl.LightningModule):
         transcriptions = transcriptions.long()
         start_id, pad_id, eos_id = self.tokenizer.token_to_id('[SOS]'), self.tokenizer.token_to_id('[PAD]'), self.tokenizer.token_to_id('[EOS]')
         batch_size = imgs.size(0)
-        enc_output = self.vision_encoder(imgs)
         dec_input = torch.full((batch_size, self.context_length), pad_id, device=self.device, dtype=torch.long)
         dec_input[:, 0] = start_id
         loss_arr = []
         outputs = torch.full((batch_size, 1), start_id, device=self.device, dtype=torch.long)
+        is_finished = torch.zeros(batch_size, dtype=torch.bool, device=self.device)
         for i in range(1, transcriptions.size(1)):
             # Forward pass
+            enc_output = self.vision_encoder(imgs) # inside to use the updated weights
             out_idx = i - 1 if i < self.context_length else -1 
             dec_output = self.decoder(dec_input.detach(), enc_output.detach(), out_idx=out_idx)
             dec_out_max = dec_output.argmax(-1).unsqueeze(-1)
@@ -114,15 +135,30 @@ class LitOCRVanilla(pl.LightningModule):
                 optim.step()
             else:
                 loss_arr.append(loss)
-                self.log('val_loss', loss, on_step=True, on_epoch=True, prog_bar=True)
-                self.log('val_cer', cer, on_step=True, on_epoch=True, prog_bar=True)
+                self.log('val_loss', loss, on_step=False, on_epoch=True, prog_bar=True)
+                self.log('val_cer', cer, on_step=False, on_epoch=True, prog_bar=True)
             
             # Updating our sequences
-            # scheduled_sampling =  label.unsqueeze(1) if torch.rand(1) < self.teacher_forcing_ratio else dec_out_max.detach().long()
-            scheduled_sampling =  label.unsqueeze(-1) 
+            
+            new_label = self.teacher_or_sample(label, dec_out_max, train)
             if i < self.context_length:
-                dec_input[: , i] = scheduled_sampling.squeeze(-1)
+                dec_input[: , i] = new_label.squeeze(-1)
             else:
-                dec_input = torch.cat([dec_input[:, 1:], scheduled_sampling], dim=-1)
+                dec_input = torch.cat([dec_input[:, 1:], new_label], dim=-1)
 
         return outputs, loss_arr
+  
+  def teacher_or_sample(self, label, dec_out_max, train=False):
+    '''
+    Obtains the next label for the OCR model
+    '''
+    if train:
+      return dec_out_max.detach().long()
+    
+    label = label.unsqueeze(-1)
+    if not self.schedule_sample:
+      return label
+    if self.schedule_sample and torch.rand(1) < self.schedule_sample_prob:
+      return label
+    dec_out_max = torch.where(dec_out_max == self.tokenizer.token_to_id('[PAD]'), label, dec_out_max) # Teacher forcing if pad is predicted
+    return dec_out_max.detach().long()

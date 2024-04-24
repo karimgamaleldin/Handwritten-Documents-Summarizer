@@ -245,9 +245,3 @@ class IAMDataset(Dataset):
                     with open(transcription_path) as f:
                         transcription = f.read()
                         self.transcriptions.append(transcription)
-
-    
-
-iam = IAM(train_path='data/train', test_path='data/test', tokenizer_path='tokenizer/tokenizer.json', distribute_data=True)
-iam.prepare_data()
-iam.setup()
