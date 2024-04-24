@@ -7,10 +7,10 @@ import pandas as pd
 from tqdm import tqdm
 import pytorch_lightning as pl
 from torch.utils.data import Dataset, DataLoader, Sampler
-from tokenizer.my_tokenizer import MyTokenizer
+from .tokenizer.my_tokenizer import MyTokenizer
 import albumentations as A
 from albumentations.pytorch import ToTensorV2
-from custom_augmentation import Erosion, Dilation
+from .custom_augmentation import Erosion, Dilation
 
 """
 The Datamodule class containing the lighting data module and the torch dataset for the IAM dataset.
