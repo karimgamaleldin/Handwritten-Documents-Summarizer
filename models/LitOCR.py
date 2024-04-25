@@ -56,7 +56,7 @@ class LitOCR(pl.LightningModule):
     loss_mean = torch.stack(loss_arr).mean()
     return loss_mean
   
-  def on_train_epoch_end(self, outputs):
+  def on_train_epoch_end(self, outputs=None):
     sch = self.lr_schedulers()
     val_loss = self.trainer.callback_metrics['val_loss']
     sch.step(val_loss)
