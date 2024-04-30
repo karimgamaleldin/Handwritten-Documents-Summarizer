@@ -1,6 +1,6 @@
 import wandb
 import pytorch_lightning as pl
-from .models.LitOCRXL import LitOCRXL
+from .training.LitOCRXL import LitOCRXL
 
 
 class ExampleLogger(pl.Callback):

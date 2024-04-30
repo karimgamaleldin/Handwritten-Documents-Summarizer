@@ -4,8 +4,8 @@ import pytorch_lightning as pl
 from pytorch_lightning.loggers import WandbLogger
 from torch import nn, optim
 from torch.nn import functional as F
-from .Transformer_XL import TransformerXL
-from .vision_encoder import VisionEncoder
+from ..models.Transformer_XL import TransformerXL
+from ..models.vision_encoder import VisionEncoder
 from torchmetrics.text import CharErrorRate
 
 

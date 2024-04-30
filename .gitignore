@@ -9,3 +9,5 @@ __pycache__
 wandb
 lightning_logs
 models/__pycache__
+test_2.jpg
+trocr_summarizer_test.jpg

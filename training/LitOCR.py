@@ -2,7 +2,7 @@ import torch
 import wandb
 import pytorch_lightning as pl
 from torch import nn, optim
-from .vision_encoder import VisionEncoder
+from ..models.vision_encoder import VisionEncoder
 from torchmetrics.text import CharErrorRate
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 
