@@ -1,0 +1,137 @@
+@import url("https://fonts.googleapis.com/css2?family=Sevillana&display=swap");
+
+.app {
+  background-color: #ccc;
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+}
+
+.app-container {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-around;
+  width: 100%;
+  height: 100%;
+}
+
+.container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 900px;
+  height: 900px;
+  border: #333 2px solid;
+  border-radius: 100px;
+  padding: 20px;
+  box-sizing: border-box;
+}
+
+.title {
+  font-size: 3.5rem;
+  font-weight: 700;
+  color: #333;
+  margin-bottom: 1rem;
+  text-align: center;
+  font-family: "Sevillana", sans-serif;
+}
+
+.button-container {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  padding: 30px;
+  margin-top: 1rem;
+  width: 100%;
+  align-items: flex-end;
+  flex-grow: 1;
+}
+
+.buttons {
+  display: flex;
+  justify-content: center;
+  margin-top: 1rem;
+  width: 100%;
+}
+
+button {
+  background-color: #3f3;
+  color: white;
+  padding: 0.5rem 1rem;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+  font-size: 1rem;
+  font-weight: 700;
+  margin: 0 0.5rem;
+}
+
+button:hover {
+  background-color: #888;
+  transform: scale(1.01);
+}
+
+.clear-button {
+  background-color: #f33;
+}
+
+.img-placeholder {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  align-self: center;
+  width: 450px;
+  height: 636px;
+}
+
+img {
+  width: 450px;
+  height: 636px;
+  align-self: center;
+  border-radius: 30px;
+}
+
+.image-container {
+  display: flex;
+  justify-content: center;
+  margin-top: 1rem;
+  width: 450px;
+  height: 636px;
+}
+
+input[type="file"] {
+  display: inline-block;
+  padding: 10px 20px;
+  cursor: pointer;
+  background-color: #008cba; /* Blue color */
+  color: white;
+  border: none;
+  border-radius: 4px;
+  transition: all 0.5s;
+}
+
+input[type="file"]:hover {
+  background-color: #3f3;
+}
+
+.output-title-container {
+  width: 100%; /* Ensures the title container spans the full width of the container */
+  text-align: center;
+  margin-bottom: 20px; /* Adds space below the title container */
+}
+
+.output-container {
+  width: 100%; /* Ensures the output container spans the full width of the container */
+  flex-grow: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  align-items: center;
+  padding: 10px;
+  overflow: auto;
+  word-wrap: break-word;
+  max-height: 100%;
+  font-size: 1.5rem;
+}
