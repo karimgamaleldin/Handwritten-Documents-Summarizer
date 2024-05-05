@@ -1,11 +1,11 @@
-FROM node:20-alpine
+FROM python:3.11-alpine 
 
 WORKDIR /app
 
-COPY package.json .
+COPY requirements.txt .
 
-RUN npm install
+RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
-RUN npm run build
+RUN python manage.py collectstatic --noinput

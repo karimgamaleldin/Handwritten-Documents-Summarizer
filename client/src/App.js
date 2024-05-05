@@ -1,21 +1,31 @@
 import { useState } from "react";
 import ImageInput from "./ImageInput";
 import OutputViewer from "./OutputViewer";
+import { uploadImage } from "./api";
 import "./App.css";
 
 function App() {
   const [image, setImage] = useState(null);
-  const [output, setOutput] = useState(null);
   const [outputType, setOutputType] = useState(null);
+  const [output, setOutput] = useState(null);
   const handleSubmit = (e, isSummarize) => {
     console.log("Submit clicked");
+
     if (isSummarize) {
       setOutputType("Summarization");
-      setOutput("Summarizing...");
     } else {
       setOutputType("Recognition");
-      setOutput("Reading...");
     }
+
+    const endpoint = isSummarize ? "summarize" : "recognize";
+    uploadImage(endpoint, image)
+      .then((response) => {
+        console.log(response);
+        setOutput(response);
+      })
+      .catch((error) => {
+        console.error(error);
+      });
   };
   return (
     <div className='app'>

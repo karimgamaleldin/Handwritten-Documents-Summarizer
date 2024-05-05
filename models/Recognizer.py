@@ -3,7 +3,7 @@ import torch.nn as nn
 from transformers import VisionEncoderDecoderModel, TrOCRProcessor, GenerationConfig
 from PIL import Image
 
-class TrOCR:
+class Recognizer:
   def __init__(self, model='microsoft/trocr-base-handwritten', processor='microsoft/trocr-base-handwritten'):
     self.processor_name = processor
     self.model_name = model
