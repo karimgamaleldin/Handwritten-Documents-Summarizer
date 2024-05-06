@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { PlusOutlined } from "@ant-design/icons";
 import { Image, Upload, Card, Typography, Button, InputNumber } from "antd";
+import testImage from "./assets/test_2.jpg";
 const getBase64 = (file) =>
   new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -13,26 +14,9 @@ const App = () => {
   const [previewImage, setPreviewImage] = useState("");
   const [minLength, setMinLength] = useState();
   const [maxLength, setMaxLength] = useState();
-  const [fileList, setFileList] = useState([
-    {
-      uid: "-1",
-      name: "image.png",
-      status: "done",
-      url: "https://zos.alipayobjects.com/rmsportal/jkjgkEfvpUPVyRjUImniVslZfWPnJuuZ.png",
-    },
-    {
-      uid: "-xxx",
-      percent: 50,
-      name: "image.png",
-      status: "uploading",
-      url: "https://zos.alipayobjects.com/rmsportal/jkjgkEfvpUPVyRjUImniVslZfWPnJuuZ.png",
-    },
-    {
-      uid: "-5",
-      name: "image.png",
-      status: "error",
-    },
-  ]);
+  const [task, setTask] = useState("summarize"); // ["summarize", "recognize"]
+  const [fileList, setFileList] = useState([]);
+  const [selectedFile, setSelectedFile] = useState(null);
   const handlePreview = async (file) => {
     if (!file.url && !file.preview) {
       file.preview = await getBase64(file.originFileObj);
@@ -40,16 +24,28 @@ const App = () => {
     setPreviewImage(file.url || file.preview);
     setPreviewOpen(true);
   };
-  const handleChange = ({ fileList: newFileList }) => setFileList(newFileList);
-  // Define dummy handlers for each button
+  const handleChange = ({ fileList: newFileList }) => {
+    setFileList(newFileList);
+    console.log("File list: ", newFileList);
+  };
   const handleSummarize = () => {
     console.log("Summarize button clicked");
-    // Add logic to handle summarization
+    if (task === "summarize") {
+      const img = selectedFile.originFileObj;
+      const imgBase64 = getBase64(img);
+      console.log("Selected file: ", imgBase64);
+      // API call to summarize the image
+    }
+    setTask("summarize");
   };
 
-  const handleRecognize = () => {
+  const handleRecognize = async () => {
     console.log("Recognize button clicked");
-    // Add logic to handle recognition
+    const img = selectedFile.originFileObj;
+    const imgBase64 = await getBase64(img);
+    console.log("Selected fiasfsle: ", imgBase64);
+    // API call to recognize the image
+    setTask("recognize");
   };
 
   const handleClear = () => {
@@ -75,6 +71,26 @@ const App = () => {
     </button>
   );
   const { Title } = Typography;
+
+  const handleSelect = (file) => {
+    setSelectedFile(file);
+    console.log("Selected file: ", file);
+  };
+
+  const itemRender = (originNode, file, currFileList) => {
+    return (
+      <div
+        style={{
+          cursor: "pointer",
+        }}
+        onClick={(e) => {
+          handleSelect(file);
+        }}
+      >
+        {originNode}
+      </div>
+    );
+  };
   return (
     <>
       <Title
@@ -106,6 +122,12 @@ const App = () => {
           fileList={fileList}
           onPreview={handlePreview}
           onChange={handleChange}
+          itemRender={itemRender}
+          showUploadList={{
+            showPreviewIcon: true,
+            showRemoveIcon: true,
+            showDownloadIcon: false,
+          }}
         >
           {fileList.length >= 8 ? null : uploadButton}
         </Upload>
@@ -123,23 +145,25 @@ const App = () => {
           />
         )}
       </div>
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "center",
-          marginTop: 20,
-          gap: "10px",
-        }}
-      >
-        <div>
-          <label>Min Length:</label>
-          <InputNumber min={0} value={minLength} onChange={setMinLength} />
+      {task === "summarize" && (
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "center",
+            marginTop: 20,
+            gap: "10px",
+          }}
+        >
+          <div>
+            <label>Min Length:</label>
+            <InputNumber min={0} value={minLength} onChange={setMinLength} />
+          </div>
+          <div>
+            <label>Max Length:</label>
+            <InputNumber min={0} value={maxLength} onChange={setMaxLength} />
+          </div>
         </div>
-        <div>
-          <label>Max Length:</label>
-          <InputNumber min={0} value={maxLength} onChange={setMaxLength} />
-        </div>
-      </div>
+      )}
       <div style={{ display: "flex", justifyContent: "center", marginTop: 20 }}>
         <Button
           onClick={handleSummarize}
