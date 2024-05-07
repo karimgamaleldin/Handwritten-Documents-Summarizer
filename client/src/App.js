@@ -1,7 +1,17 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { PlusOutlined } from "@ant-design/icons";
-import { Image, Upload, Card, Typography, Button, InputNumber } from "antd";
+import {
+  Image,
+  Upload,
+  Card,
+  Typography,
+  Button,
+  InputNumber,
+  Modal,
+} from "antd";
 import testImage from "./assets/test_2.jpg";
+import { uploadImage } from "./api";
+
 const getBase64 = (file) =>
   new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -14,9 +24,18 @@ const App = () => {
   const [previewImage, setPreviewImage] = useState("");
   const [minLength, setMinLength] = useState();
   const [maxLength, setMaxLength] = useState();
-  const [task, setTask] = useState("summarize"); // ["summarize", "recognize"]
+  const [task, setTask] = useState("recognize"); // ["summarize", "recognize"]
   const [fileList, setFileList] = useState([]);
   const [selectedFile, setSelectedFile] = useState(null);
+  const [output, setOutput] = useState(
+    "Please choose an image to summarize or recognize"
+  );
+  const [isLoading, setIsLoading] = useState(false);
+
+  useEffect(() => {
+    setSelectedFile(null);
+  }, [fileList]);
+
   const handlePreview = async (file) => {
     if (!file.url && !file.preview) {
       file.preview = await getBase64(file.originFileObj);
@@ -26,31 +45,38 @@ const App = () => {
   };
   const handleChange = ({ fileList: newFileList }) => {
     setFileList(newFileList);
-    console.log("File list: ", newFileList);
   };
-  const handleSummarize = () => {
-    console.log("Summarize button clicked");
+  const handleSummarize = async () => {
     if (task === "summarize") {
+      if (selectedFile === null) {
+        alert("Please select a file");
+        return;
+      }
+      setIsLoading(true);
       const img = selectedFile.originFileObj;
-      const imgBase64 = getBase64(img);
-      console.log("Selected file: ", imgBase64);
-      // API call to summarize the image
+      const result = await uploadImage(img, minLength, maxLength, "summarize");
+      setOutput(result);
     }
+    setIsLoading(false);
     setTask("summarize");
   };
 
   const handleRecognize = async () => {
-    console.log("Recognize button clicked");
+    if (selectedFile === null) {
+      alert("Please select a file");
+      return;
+    }
+    setIsLoading(true);
     const img = selectedFile.originFileObj;
-    const imgBase64 = await getBase64(img);
-    console.log("Selected fiasfsle: ", imgBase64);
-    // API call to recognize the image
+    const result = await uploadImage(img, 0, 0, "recognize");
+    setOutput(result);
+    setIsLoading(false);
     setTask("recognize");
   };
 
   const handleClear = () => {
-    console.log("Clear button clicked");
-    setFileList([]); // Assuming fileList is managed in the state for uploaded files
+    setSelectedFile(null);
+    setOutput("Please choose an image to summarize or recognize");
   };
   const uploadButton = (
     <button
@@ -74,7 +100,6 @@ const App = () => {
 
   const handleSelect = (file) => {
     setSelectedFile(file);
-    console.log("Selected file: ", file);
   };
 
   const itemRender = (originNode, file, currFileList) => {
@@ -112,12 +137,10 @@ const App = () => {
         title={<h2 style={{ fontSize: "24px", marginBottom: "0" }}>Output</h2>}
         style={{ width: "100%" }}
       >
-        <p>Please choose an image to summarize or recognize</p>
+        <p>{output}</p>
       </Card>
-
       <div style={{ display: "flex", justifyContent: "center", marginTop: 20 }}>
         <Upload
-          action='https://660d2bd96ddfa2943b33731c.mockapi.io/api/upload'
           listType='picture-circle'
           fileList={fileList}
           onPreview={handlePreview}
@@ -127,6 +150,11 @@ const App = () => {
             showPreviewIcon: true,
             showRemoveIcon: true,
             showDownloadIcon: false,
+          }}
+          customRequest={async ({ file, onSuccess }) => {
+            setTimeout(() => {
+              onSuccess("ok");
+            }, 0);
           }}
         >
           {fileList.length >= 8 ? null : uploadButton}
@@ -183,6 +211,15 @@ const App = () => {
           Clear
         </Button>
       </div>
+      <Modal
+        open={isLoading}
+        title='Processing'
+        footer={null}
+        closable={false}
+        maskClosable={false}
+      >
+        <p>Please wait while we are processing your image...</p>
+      </Modal>
     </>
   );
 };

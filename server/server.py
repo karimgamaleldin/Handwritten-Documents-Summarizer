@@ -1,4 +1,5 @@
 from flask import Flask, request, jsonify
+from flask_cors import CORS
 from models import Summarizer, Recognizer
 from utils import summarize_image, recognize_image
 import numpy as np
@@ -6,6 +7,7 @@ import cv2
 
 
 app = Flask(__name__)
+CORS(app, origins=['http://localhost:3000'])
 
 sum_model = Summarizer()
 ocr_model = Recognizer()
@@ -26,7 +28,9 @@ def summarize():
     img = cv2.imdecode(npimg, cv2.IMREAD_COLOR)
     # Summarize the text from the image
     min_length = request.form.get('min_length', 100)
+    min_length = int(min_length)
     max_length = request.form.get('max_length', 150)
+    max_length = int(max_length)
     txt = summarize_image(ocr_model, sum_model, img=img, min_length=min_length, max_length=max_length)
     return jsonify({'prediction': txt})
 
@@ -41,6 +45,7 @@ def recognize():
     img = cv2.imdecode(npimg, cv2.IMREAD_COLOR)
     # Predict the text from the image
     txt = recognize_image(ocr_model, img=img)
+    print(txt)
     return jsonify({'prediction': txt})
 
 

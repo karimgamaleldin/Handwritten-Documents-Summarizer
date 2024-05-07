@@ -1,23 +1,30 @@
 import axios from "axios";
 
-async function uploadImage(endpoint, image) {
-  const url = `http://127.0.0.1:8000/api/summarize/`;
-  const formData = new FormData();
-  formData.append("image", image);
-  console.log(formData);
+async function uploadImage(
+  imageFile,
+  minLength = 100,
+  maxLength = 150,
+  task = "summarize"
+) {
+  const endpoint = `http://localhost:5000/${task}`;
+  let formData = new FormData();
 
-  const config = {
-    headers: {
-      // "content-type": "multipart/form-data",
-    },
-  };
+  formData.append("image", imageFile);
 
+  if (task === "summarize") {
+    formData.append("min_length", minLength);
+    formData.append("max_length", maxLength);
+  }
   try {
-    const response = await axios.post(url, formData, config);
-    return response.data;
+    const response = await axios({
+      method: "post",
+      url: endpoint,
+      data: formData,
+      headers: { "Content-Type": "multipart/form-data" },
+    });
+    return response.data.prediction;
   } catch (error) {
-    console.error(error);
-    throw error;
+    throw error; // Rethrow to ensure the calling function can catch
   }
 }
 
