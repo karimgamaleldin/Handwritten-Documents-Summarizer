@@ -9,8 +9,8 @@ import {
   InputNumber,
   Modal,
 } from "antd";
-import testImage from "./assets/test_2.jpg";
 import { uploadImage } from "./api";
+import "./App.css";
 
 const getBase64 = (file) =>
   new Promise((resolve, reject) => {
@@ -24,11 +24,11 @@ const App = () => {
   const [previewImage, setPreviewImage] = useState("");
   const [minLength, setMinLength] = useState();
   const [maxLength, setMaxLength] = useState();
-  const [task, setTask] = useState("recognize"); // ["summarize", "recognize"]
+  const [task, setTask] = useState("recognize"); // recognize or summarize
   const [fileList, setFileList] = useState([]);
   const [selectedFile, setSelectedFile] = useState(null);
   const [output, setOutput] = useState(
-    "Please choose an image to summarize or recognize"
+    "Please choose an image to summarize or recognize (please note that the model can only process handwritten text on a white background with black ink)"
   );
   const [isLoading, setIsLoading] = useState(false);
 
@@ -54,8 +54,17 @@ const App = () => {
       }
       setIsLoading(true);
       const img = selectedFile.originFileObj;
-      const result = await uploadImage(img, minLength, maxLength, "summarize");
-      setOutput(result);
+      try {
+        const result = await uploadImage(
+          img,
+          minLength,
+          maxLength,
+          "summarize"
+        );
+        setOutput(result);
+      } catch (err) {
+        setOutput(null);
+      }
     }
     setIsLoading(false);
     setTask("summarize");
@@ -68,15 +77,21 @@ const App = () => {
     }
     setIsLoading(true);
     const img = selectedFile.originFileObj;
-    const result = await uploadImage(img, 0, 0, "recognize");
-    setOutput(result);
+    try {
+      const result = await uploadImage(img, 0, 0, "recognize");
+      setOutput(result);
+    } catch (err) {
+      setOutput(null);
+    }
     setIsLoading(false);
     setTask("recognize");
   };
 
   const handleClear = () => {
     setSelectedFile(null);
-    setOutput("Please choose an image to summarize or recognize");
+    setOutput(
+      "Please choose an image to summarize or recognize (please note that the model can only process handwritten text on a white background with black ink)"
+    );
   };
   const uploadButton = (
     <button
@@ -103,10 +118,13 @@ const App = () => {
   };
 
   const itemRender = (originNode, file, currFileList) => {
+    const isSelected = selectedFile && file.uid === selectedFile.uid;
     return (
       <div
         style={{
           cursor: "pointer",
+          border: isSelected ? "2px solid green" : "none", // Apply green border if selected
+          padding: isSelected ? "2px" : "4px", // Adjust padding to keep size consistent
         }}
         onClick={(e) => {
           handleSelect(file);
@@ -218,7 +236,15 @@ const App = () => {
         closable={false}
         maskClosable={false}
       >
-        <p>Please wait while we are processing your image...</p>
+        <p>
+          Please wait while we are processing your image (it may take a while at
+          first)...
+        </p>
+      </Modal>
+      <Modal open={output === null} footer={null} onCancel={handleClear}>
+        <p className='error_message'>
+          Error: There was an error processing your image. Please try again.
+        </p>
       </Modal>
     </>
   );

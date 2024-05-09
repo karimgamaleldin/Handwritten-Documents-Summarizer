@@ -1,0 +1,54 @@
+# Build the React app
+FROM node:20-alpine as react-build
+
+WORKDIR /app
+
+COPY client/package.json .
+
+RUN npm install
+
+COPY client/ .
+
+RUN npm run build
+
+# Build the flask server
+FROM python:3.11-slim as flask-build
+
+WORKDIR /app
+
+RUN apt-get update && apt-get install -y -q \
+    libgl1-mesa-glx \
+    graphviz libgraphviz-dev \
+    vim \
+    gosu \
+    python-opencv \
+    g++ \
+    python-matplotlib \
+    gedit \
+    curl \
+    unzip \
+    git \
+    wget \
+    python-yaml \
+    libcanberra-gtk-module \
+    libcanberra-gtk3-module \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY server/requirements.txt .
+
+RUN pip install --no-cache-dir -r requirements.txt
+
+COPY server/ .
+
+# Setup nginx 
+FROM nginx:1.25 as nginx
+
+COPY --from=react-build /app/build /usr/share/nginx/html
+
+COPY --from=flask-build /app /app
+
+COPY nginx.conf /etc/nginx/nginx.conf
+
+EXPOSE 80
+
+CMD ["nginx", "-g", "daemon off;"]

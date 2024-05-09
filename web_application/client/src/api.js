@@ -24,7 +24,7 @@ async function uploadImage(
     });
     return response.data.prediction;
   } catch (error) {
-    throw error; // Rethrow to ensure the calling function can catch
+    throw error;
   }
 }
 
