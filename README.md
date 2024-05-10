@@ -1,10 +1,24 @@
 # Handwritten Document Summarizer 👀
 
-This projects aim to create an OCR (optical character recognition) by implementing models from scratch and fine-tuning pre-trained vision language models 
+**Your daily friend to recognize and summarize your handwritten documents!**
 
-## Descriptions 🖊️
+This project is focused on creating a Handwritten Document Summarizer website that utilizes Vision Language Models (VLMs) for optical character recognition and Large Language Models (LLMs) for text summarization. 
 
-This project 
+## Project Overview 🖊️
+
+### Models
+
+#### 1. Recognizer Model
+The recognizer models consist of encoder-decoder architectures inspired by well-known models, implemented from scratch or fine-tuned:
+
+- **Vision Encoder**: Inspired by [ViT](https://arxiv.org/abs/2010.11929), this encoder is built from scratch using PyTorch. [View Code](./models/vision_encoder.py)
+- **Vanilla Decoder**: Inspired by the [Original Transformer](https://arxiv.org/abs/1706.03762), implemented from scratch using PyTorch. [View Code](./models/vanilla_decoder.py)
+- **Transformer-XL Decoder**: Inspired by [Transformer-XL](https://arxiv.org/abs/1901.02860), built from scratch using PyTorch. [View Code](./models/Transformer_XL.py)
+- **Fine-tuned TrOCR**: This model fine-tunes the pretrained [TrOCR](https://huggingface.co/docs/transformers/en/model_doc/trocr) using [Seq2seq Trainer](https://huggingface.co/docs/transformers/v4.40.2/en/main_classes/trainer#transformers.Seq2SeqTrainer).
+- **LoRA Fine-tuned TrOCR**: Incorporates Low-Rank Adaptation (LoRA) into the TrOCR architecture, enhancing its adaptability. [View Code](./models/TrOCRWithLoRA.py)
+
+#### 2. Summarizer Model
+- Utilizes Facebook's [BART Model](https://huggingface.co/facebook/bart-large-cnn) pretrained on English and fine-tuned on the [CNN Daily Mail dataset](https://huggingface.co/datasets/cnn_dailymail).
 
 ## Tech Stack 💻
 
