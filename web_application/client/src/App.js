@@ -9,7 +9,7 @@ import {
   InputNumber,
   Modal,
 } from "antd";
-import { uploadImage } from "./api";
+import { uploadImage } from "./api/UploadImage";
 import "./App.css";
 
 const getBase64 = (file) =>

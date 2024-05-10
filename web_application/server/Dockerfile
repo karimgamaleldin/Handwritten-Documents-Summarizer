@@ -31,13 +31,14 @@ WORKDIR /app
 
 # Copy the Python requirements file and install Python dependencies
 COPY requirements.txt .
+
 RUN pip install -r requirements.txt
+
+# Added later, don't want to install all the dependencies again :)
+RUN pip install pillow 
 
 # Copy the rest of your application's code into the container
 COPY . .
-
-# Expose the port the app runs on
-EXPOSE 5000
 
 # Command to run the application
 CMD ["python", "-m", "server"]

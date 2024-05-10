@@ -18,7 +18,7 @@ ocr_model = Recognizer()
 def index() -> str:
     return 'Hello, World!'
 
-@app.route('/summarize', methods=['POST'])
+@app.route('/api/summarize', methods=['POST'])
 def summarize():
     if 'image' not in request.files:
         return jsonify({'error': 'No file part'}), 400
@@ -38,7 +38,7 @@ def summarize():
     except ValueError as e:
         return jsonify({'error': str(e)}), 400
 
-@app.route('/recognize', methods=['POST'])
+@app.route('/api/recognize', methods=['POST'])
 def recognize():
     if 'image' not in request.files:
         return jsonify({'error': 'No file part'}), 400

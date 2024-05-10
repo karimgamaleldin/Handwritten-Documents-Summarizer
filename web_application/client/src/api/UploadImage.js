@@ -6,7 +6,7 @@ async function uploadImage(
   maxLength = 150,
   task = "summarize"
 ) {
-  const endpoint = `http://localhost:5000/${task}`;
+  const endpoint = `http://localhost/api/${task}`;
   let formData = new FormData();
 
   formData.append("image", imageFile);

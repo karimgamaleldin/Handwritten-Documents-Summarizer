@@ -1,0 +1,23 @@
+version: "3.8"
+services:
+  backend:
+    build:
+      context: ./server
+    restart: on-failure
+
+  frontend:
+    build:
+      context: ./client
+    depends_on:
+      - backend
+    restart: on-failure
+
+  reverse_proxy:
+    image: nginx:1.25
+    volumes:
+      - ./reverse_proxy/nginx.conf:/etc/nginx/nginx.conf
+    depends_on:
+      - backend
+      - frontend
+    ports:
+      - "80:80"
