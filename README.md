@@ -1,4 +1,4 @@
-# OCR-Summarizer 👀
+# Hand 👀
 
 ## Motivation
 
@@ -20,29 +20,47 @@ The deployed version of the project can be found on [OCR-Summarizer]()
 
 ## Tech Stack 💻
 
-- Data pre-processing: NumPy, OpenCV, Pytorch, Albumentations, HuggingFace's Tokenizers
-- Model development: Pytorch, Pytorch lightning, HuggingFace's Transformers
-- Training: Kaggle
-- Experiment Tracking: Weights & Biases
+<div align="center">
 
-<!-- ## Experiments 🧪
+![PyTorch](https://img.shields.io/badge/PyTorch-EE4C2C?style=for-the-badge&logo=pytorch&logoColor=white)
 
-| Model        | val_cer |
-| ------------ | ------- |
-| Experiment 1 |      |
-| Row 2 Col 1  |         |
-| Row 3 Col 1  |         |
+![WandB](https://img.shields.io/badge/Weights_&_Biases-FFBE00?style=for-the-badge&logo=WeightsAndBiases&logoColor=white)
 
-<details>
-  <summary>Experiment 1</summary>
+![Flask](https://img.shields.io/badge/Flask-000000?style=for-the-badge&logo=flask&logoColor=white)
 
-  1. Encoder: 1 CNN Layer for patch embedding + Transformer
-  2. Decoder: Vanilla Transformer
-  3. Optimizer: Adam (learning rate = 5e-4)
-  4. Vocabulary Size: 128
-  5. Training Strategy: Teacher forcing
+![NumPY](https://img.shields.io/badge/Numpy-777BB4?style=for-the-badge&logo=numpy&logoColor=white)
 
-</details> -->
+![Python](https://img.shields.io/badge/Python-FFD43B?style=for-the-badge&logo=python&logoColor=blue)
+
+![OpenCV](https://img.shields.io/badge/OpenCV-27338e?style=for-the-badge&logo=OpenCV&logoColor=white)
+
+![Lightning](https://img.shields.io/badge/Lightning-792DE4?style=for-the-badge&logo=lightning&logoColor=white)
+
+![Kaggle](https://img.shields.io/badge/Kaggle-20BEFF?style=for-the-badge&logo=Kaggle&logoColor=white)
+
+![Ant Design](https://img.shields.io/badge/Ant%20Design-1890FF?style=for-the-badge&logo=antdesign&logoColor=white)
+
+![React](https://img.shields.io/badge/React-20232A?style=for-the-badge&logo=react&logoColor=61DAFB)
+
+![Nginx](https://img.shields.io/badge/Nginx-009639?style=for-the-badge&logo=nginx&logoColor=white)
+
+![Docmer](https://img.shields.io/badge/Docker-2CA5E0?style=for-the-badge&logo=docker&logoColor=white)
+
+</div>
+
+**Dataset:** [IAM Database](https://fki.tic.heia-fr.ch/databases/iam-handwriting-database)
+
+**Data pre-processing:** NumPy, OpenCV, Pytorch, Albumentations, HuggingFace's Tokenizers
+
+**Model Development:** Pytorch, Pytorch lightning, HuggingFace's Transformers
+
+**Training:** Kaggle
+
+**Client:** React, Ant Design, Axios
+
+**Server:** Flask
+
+**Deployment:** Nginx, Docker
 
 ## Credits
 
