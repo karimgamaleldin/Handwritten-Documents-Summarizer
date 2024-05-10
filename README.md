@@ -9,16 +9,18 @@ This project is focused on creating a Handwritten Document Summarizer website th
 ### Models
 
 #### 1. Recognizer Model
-The recognizer models consist of encoder-decoder architectures inspired by well-known models, implemented from scratch or fine-tuned:
+The recognizer models employ an encoder-decoder architecture, inspired by well-known models. Various versions were tested, either implemented from scratch or fine-tuned such as:
 
 - **Vision Encoder**: Inspired by [ViT](https://arxiv.org/abs/2010.11929), this encoder is built from scratch using PyTorch. [View Code](./models/vision_encoder.py)
-- **Vanilla Decoder**: Inspired by the [Original Transformer](https://arxiv.org/abs/1706.03762), implemented from scratch using PyTorch. [View Code](./models/vanilla_decoder.py)
-- **Transformer-XL Decoder**: Inspired by [Transformer-XL](https://arxiv.org/abs/1901.02860), built from scratch using PyTorch. [View Code](./models/Transformer_XL.py)
-- **Fine-tuned TrOCR**: This model fine-tunes the pretrained [TrOCR](https://huggingface.co/docs/transformers/en/model_doc/trocr) using [Seq2seq Trainer](https://huggingface.co/docs/transformers/v4.40.2/en/main_classes/trainer#transformers.Seq2SeqTrainer).
-- **LoRA Fine-tuned TrOCR**: Incorporates Low-Rank Adaptation (LoRA) into the TrOCR architecture, enhancing its adaptability. [View Code](./models/TrOCRWithLoRA.py)
+- **Vanilla Decoder**: Inspired by the [Original Transformer](https://arxiv.org/abs/1706.03762), this decoder is implemented from scratch using PyTorch. [View Code](./models/vanilla_decoder.py)
+- **Transformer-XL Decoder**: This decoder, inspired by [Transformer-XL](https://arxiv.org/abs/1901.02860), is built from scratch using PyTorch. [View Code](./models/Transformer_XL.py)
+- **Fine-tuned TrOCR**: Fine-tunes the pretrained [TrOCR](https://huggingface.co/docs/transformers/en/model_doc/trocr) model using the [Seq2seq Trainer](https://huggingface.co/docs/transformers/v4.40.2/en/main_classes/trainer#transformers.Seq2SeqTrainer).
+- **LoRA Fine-tuned TrOCR**: Enhances the TrOCR architecture with Low-Rank Adaptation (LoRA) to improve adaptability. [View Code](./models/TrOCRWithLoRA.py)
 
 #### 2. Summarizer Model
-- Utilizes Facebook's [BART Model](https://huggingface.co/facebook/bart-large-cnn) pretrained on English and fine-tuned on the [CNN Daily Mail dataset](https://huggingface.co/datasets/cnn_dailymail).
+- **BART Model**: Utilizes the [BART Model](https://huggingface.co/facebook/bart-large-cnn) from Facebook, which was pretrained on English and further fine-tuned by facebook on the [CNN Daily Mail dataset](https://huggingface.co/datasets/cnn_dailymail) for efficient summarization.
+
+The fine-tuned TrOCR model, achieving a character error rate of 12%, represents a significant advancement over baseline models, particularly due to Microsoft's pretraining on synthesized data.
 
 ## Tech Stack 💻
 
@@ -36,23 +38,23 @@ The recognizer models consist of encoder-decoder architectures inspired by well-
 ![React](https://img.shields.io/badge/React-20232A?style=for-the-badge&logo=react&logoColor=61DAFB)
 ![Ant Design](https://img.shields.io/badge/Ant%20Design-1890FF?style=for-the-badge&logo=antdesign&logoColor=white)
 ![Nginx](https://img.shields.io/badge/Nginx-009639?style=for-the-badge&logo=nginx&logoColor=white)
-![Docmer](https://img.shields.io/badge/Docker-2CA5E0?style=for-the-badge&logo=docker&logoColor=white)
+![Docker](https://img.shields.io/badge/Docker-2CA5E0?style=for-the-badge&logo=docker&logoColor=white)
 
 </div>
 
 **Dataset:** [IAM Database](https://fki.tic.heia-fr.ch/databases/iam-handwriting-database)
 
-**Data pre-processing:** NumPy, OpenCV, Pytorch, Albumentations, HuggingFace's Tokenizers
+**Data preprocessing:** NumPy, OpenCV, Pytorch, Albumentations, HuggingFace's Tokenizers
 
-**Model Development:** Pytorch, Pytorch lightning, HuggingFace's Transformers
+**Model Development:** Pytorch, Pytorch lightning, Weights and Biases, HuggingFace's Transformers
 
-**Training:** Kaggle
+**Training:** Model training and fine-tuning was performed on Kaggle
 
-**Client:** React, Ant Design, Axios
+**Frontend:** React, Ant Design, Axios
 
-**Server:** Flask
+**Backend:** Flask
 
-**Deployment:** Nginx, Docker
+**Deployment & Containerization:** Nginx, Docker
 
 ## Installation
 
@@ -65,9 +67,9 @@ Before you begin, ensure you have met the following requirements:
 - **Docker** - [Download & Install Docker](https://docs.docker.com/get-docker/).
 - **Docker Compose** - [official guide](https://docs.docker.com/compose/install/).
 
-### Cloning the Repository
+### Setting Up the Project
 
-To get started with the project, clone the repository to your local machine:
+To clone the repository and navigate to the project directory, run the following commands:
 ```bash
 git clone https://github.com/karimgamaleldin/Handwritten-Documents-Summarizer.git
 cd Handwritten-Documents-Summarizer/web_application
