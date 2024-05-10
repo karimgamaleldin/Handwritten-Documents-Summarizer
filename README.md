@@ -4,17 +4,7 @@ This projects aim to create an OCR (optical character recognition) by implementi
 
 ## Descriptions 🖊️
 
-This projects takes inspirations from well-known models to either implement or use pre-trained models for our task
-
-Models used:
-
-1. [OCR encoder](./models/vision_encoder.py) - A transformer-based vision model inspired by [ViT](https://arxiv.org/abs/2010.11929) architecture and [CvT](https://arxiv.org/abs/2103.15808v1) (implemented from scratch using pytorch)
-2. [Vanilla decoder](./models/vanilla_decoder.py) - A transformer based text model inspired by the original transformer architecture [Attention is all you need](https://arxiv.org/abs/1706.03762)
-3. [XL decoder](./models/Transformer_XL.py) - A transformer-based text model inspired by [Transformer-XL](https://arxiv.org/abs/1901.02860) architecture (implemented from scratch using pytorch)
-4. [Finetuned OCR model](./pretrained_models/TrOCR.py) - The backbone is a transformer-based pre-trained model called [TrOCR](https://arxiv.org/abs/2109.10282) that has been finetuned on the [IAM Handwriting Database](https://fki.tic.heia-fr.ch/databases/iam-handwriting-database).
-5. [Finetuned document understanding and parsing model](./pretrained_models/Donut.py) - The backbone is a transformer based_model called [Donut](https://arxiv.org/abs/2111.15664) that has been finetuned on the [SROIE Dataset](https://github.com/zzzDavid/ICDAR-2019-SROIE)
-
-The deployed version of the project can be found on [OCR-Summarizer]()
+This project 
 
 ## Tech Stack 💻
 
@@ -49,6 +39,39 @@ The deployed version of the project can be found on [OCR-Summarizer]()
 **Server:** Flask
 
 **Deployment:** Nginx, Docker
+
+## Installation
+
+Follow these steps to install and set up the project on your local machine using Docker and Docker Compose.
+
+### Prerequisites
+
+Before you begin, ensure you have met the following requirements:
+- **Git** - [Download & Install Git](https://git-scm.com/downloads).
+- **Docker** - [Download & Install Docker](https://docs.docker.com/get-docker/).
+- **Docker Compose** - [official guide](https://docs.docker.com/compose/install/).
+
+### Cloning the Repository
+
+To get started with the project, clone the repository to your local machine:
+```bash
+git clone https://github.com/karimgamaleldin/Handwritten-Documents-Summarizer.git
+cd Handwritten-Documents-Summarizer/web_application
+```
+
+### Running the Application
+
+```bash
+docker-compose up --build
+```
+
+### Stopping the Application
+
+```bash
+docker-compose down
+```
+
+
 
 ## Credits
 
